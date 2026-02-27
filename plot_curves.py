@@ -19,7 +19,7 @@ profiles = [
 # Globally disable antialiasing for lines, axes edges, and ticks
 plt.rcParams['lines.antialiased'] = False
 plt.rcParams['patch.antialiased'] = False
-plt.rcParams['text.antialiased'] = False
+plt.rcParams['text.antialiased'] = True
 
 plt.figure(figsize=(12, 8))
 
