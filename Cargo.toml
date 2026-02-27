@@ -10,6 +10,7 @@ clap = { version = "4.5.60", features = ["derive"] }
 clap_complete = "4.5.66"
 ctrlc = "3.5.2"
 nix = {version = "0.31", features = ["ioctl", "fs"]}
+xxhash-rust = { version = "0.8.15", features = ["const_xxh3", "std", "xxh3"] }
 
 [profile.release]
 strip = true

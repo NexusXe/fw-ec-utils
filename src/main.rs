@@ -32,6 +32,10 @@ struct Args {
     #[arg(short = 'd', long, conflicts_with = "once")]
     daemon: bool,
 
+    /// Sleep duration in milliseconds between checks
+    #[arg(short = 's', long, default_value = "1000")]
+    sleep_millis: u64,
+
     /// Check temps and set fans to match curve once
     #[arg(short = 'o', long)]
     once: bool,
@@ -63,9 +67,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let profile = fan_curve::get_profile_by_name(&args.profile).unwrap_or_else(|| {
+    let profile = fan_curve::get_profile_by_name(&args.profile, None).unwrap_or_else(|| {
         eprintln!("Profile '{}' not found, using default.", args.profile);
-        fan_curve::get_profile_by_name("default").unwrap()
+        fan_curve::get_profile_by_name("default", None).unwrap()
     });
 
     if args.temp {
@@ -75,7 +79,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for (i, t) in temps.iter().enumerate() {
             match t.get() {
                 Ok(val) => {
-                    //let celsius = i32::from(val) + 200 - 273;
                     println!(
                         "Sensor {i}: {:}°C ({val:}, 0b{val:08b}){}",
                         val - 73,
@@ -132,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     })
                     .0
             );
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(std::time::Duration::from_millis(args.sleep_millis));
         }
 
         // Cleanup
@@ -140,7 +143,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fans::set_auto()?;
         println!("Set auto fan control.");
     } else if args.curve {
-        println!("Temperature,PWM");
+        println!("{profile}");
+        println!("Temperature (°C),PWM");
         for temp in 0..=u8::MAX - 4 {
             let temp = temp::EcTemp(temp);
             println!(
@@ -155,8 +159,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     } else if args.total_lut_size {
-        let total_lut_size: usize = fan_curve::PROFILES.iter().map(|p| p.lut.len()).sum();
+        let total_lut_size: usize = fan_curve::BUILTIN_PROFILES
+            .iter()
+            .map(|p| p.lut.len())
+            .sum();
         println!("{total_lut_size}");
+        println!("{:}", std::mem::size_of::<fan_curve::FanProfile>());
     } else {
         let mut cmd = Args::command();
         cmd.print_help()?;

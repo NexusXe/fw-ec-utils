@@ -11,8 +11,8 @@ use std::{
 /// The offset of temperature value stored in mapped memory.  This allows
 /// reporting a temperature range of 200K to 454K = -73C to 181C.
 pub(crate) const EC_TEMP_SENSOR_OFFSET: u16 = 200;
-pub(crate) const KELVIN_CELCIUS_OFFSET: u16 = 273;
-pub(crate) const EC_TEMP_SENSOR_OFFSET_CELSIUS: u16 = KELVIN_CELCIUS_OFFSET - EC_TEMP_SENSOR_OFFSET;
+pub(crate) const KELVIN_CELSIUS_OFFSET: u16 = 273;
+pub(crate) const EC_TEMP_SENSOR_OFFSET_CELSIUS: u16 = KELVIN_CELSIUS_OFFSET - EC_TEMP_SENSOR_OFFSET;
 
 #[derive(Debug)]
 pub(crate) enum EcTempSensorError {
@@ -85,7 +85,7 @@ impl const From<EcTemp> for Result<KelvinTemp, EcTempSensorError> {
 
 impl const From<KelvinTemp> for CelsiusTemp {
     fn from(kelvin_temp: KelvinTemp) -> Self {
-        CelsiusTemp(kelvin_temp.0.cast_signed() - KELVIN_CELCIUS_OFFSET.cast_signed())
+        CelsiusTemp(kelvin_temp.0.cast_signed() - KELVIN_CELSIUS_OFFSET.cast_signed())
     }
 }
 
