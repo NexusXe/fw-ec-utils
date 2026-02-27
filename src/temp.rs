@@ -10,7 +10,95 @@ use std::{
 
 /// The offset of temperature value stored in mapped memory.  This allows
 /// reporting a temperature range of 200K to 454K = -73C to 181C.
-pub(crate) const EC_TEMP_SENSOR_OFFSET: u32 = 200;
+pub(crate) const EC_TEMP_SENSOR_OFFSET: u16 = 200;
+pub(crate) const KELVIN_CELCIUS_OFFSET: u16 = 273;
+pub(crate) const EC_TEMP_SENSOR_OFFSET_CELSIUS: u16 = KELVIN_CELCIUS_OFFSET - EC_TEMP_SENSOR_OFFSET;
+
+#[derive(Debug)]
+pub(crate) enum EcTempSensorError {
+    NotPresent = 0xFF,
+    Error = 0xFE,
+    NotPowered = 0xFD,
+    NotCalibrated = 0xFC,
+}
+
+impl std::fmt::Display for EcTempSensorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EcTempSensorError::NotPresent => write!(f, "Not present"),
+            EcTempSensorError::Error => write!(f, "Error"),
+            EcTempSensorError::NotPowered => write!(f, "Not powered"),
+            EcTempSensorError::NotCalibrated => write!(f, "Not calibrated"),
+        }
+    }
+}
+
+impl std::error::Error for EcTempSensorError {}
+
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) struct EcTemp(pub(crate) u8);
+
+impl EcTemp {
+    pub(crate) const fn get(self) -> Result<u8, EcTempSensorError> {
+        match self.0 {
+            0xFF => Err(EcTempSensorError::NotPresent),
+            0xFE => Err(EcTempSensorError::Error),
+            0xFD => Err(EcTempSensorError::NotPowered),
+            0xFC => Err(EcTempSensorError::NotCalibrated),
+            _ => Ok(self.0),
+        }
+    }
+}
+
+impl const Default for EcTemp {
+    fn default() -> Self {
+        Self(0x00)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct KelvinTemp(pub(crate) u16);
+
+impl const Default for KelvinTemp {
+    fn default() -> Self {
+        Self(EC_TEMP_SENSOR_OFFSET)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CelsiusTemp(pub(crate) i16);
+
+impl const Default for CelsiusTemp {
+    fn default() -> Self {
+        KelvinTemp::default().into()
+    }
+}
+
+impl const From<EcTemp> for Result<KelvinTemp, EcTempSensorError> {
+    fn from(ec_temp: EcTemp) -> Self {
+        match ec_temp.get() {
+            Ok(temp) => Ok(KelvinTemp(u16::from(temp) + EC_TEMP_SENSOR_OFFSET)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl const From<KelvinTemp> for CelsiusTemp {
+    fn from(kelvin_temp: KelvinTemp) -> Self {
+        CelsiusTemp(kelvin_temp.0.cast_signed() - KELVIN_CELCIUS_OFFSET.cast_signed())
+    }
+}
+
+impl const From<EcTemp> for Result<CelsiusTemp, EcTempSensorError> {
+    fn from(ec_temp: EcTemp) -> Self {
+        match ec_temp.get() {
+            Ok(temp) => Ok(CelsiusTemp(
+                u16::from(temp).cast_signed() - EC_TEMP_SENSOR_OFFSET_CELSIUS.cast_signed(),
+            )),
+            Err(e) => Err(e),
+        }
+    }
+}
 
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
@@ -66,7 +154,7 @@ pub(crate) fn num_temp_sensors() -> &'static u8 {
     })
 }
 
-pub(crate) fn get_temperatures() -> Result<Vec<u8>, nix::Error> {
+pub(crate) fn get_temperatures() -> Result<Vec<EcTemp>, nix::Error> {
     let sensors_to_read = *num_temp_sensors();
     let mut mem = CrosEcReadmemV2 {
         offset: 0x00, // EC_MEMMAP_TEMP_SENSOR
@@ -82,7 +170,10 @@ pub(crate) fn get_temperatures() -> Result<Vec<u8>, nix::Error> {
         }
     }
 
-    Ok(mem.buffer[..sensors_to_read as usize].to_vec())
+    Ok(mem.buffer[..sensors_to_read as usize]
+        .iter()
+        .map(|&temp| EcTemp(temp))
+        .collect())
 }
 
 fn maxima_native(input: &[u8]) -> u8 {
@@ -105,15 +196,17 @@ unsafe fn maxima_vl(input: &[u8]) -> u8 {
     }
 }
 
-pub(crate) fn max_temp(input: &[u8]) -> u8 {
-    if cfg!(target_feature = "avx512vl") && input.len() == 8 {
-        unsafe { maxima_vl(input) }
+pub(crate) fn max_temp(input: &[EcTemp]) -> EcTemp {
+    let temps: Vec<u8> = input.iter().map(|temp| temp.0).collect();
+    let max_temp = if cfg!(target_feature = "avx512vl") && input.len() == 8 {
+        unsafe { maxima_vl(&temps) }
     } else {
-        maxima_native(input)
-    }
+        maxima_native(&temps)
+    };
+    EcTemp(max_temp)
 }
 
-pub(crate) fn get_max_temp() -> Result<u8, nix::Error> {
+pub(crate) fn get_max_temp() -> Result<EcTemp, nix::Error> {
     let temps = get_temperatures()?;
     Ok(max_temp(&temps))
 }
@@ -121,6 +214,47 @@ pub(crate) fn get_max_temp() -> Result<u8, nix::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ec_temp_to_kelvin() {
+        let valid_cases = [0, 50, 100, 0xFB];
+        for case in valid_cases {
+            let res: Result<KelvinTemp, EcTempSensorError> = EcTemp(case).into();
+            assert!(res.is_ok());
+
+            assert_eq!(
+                res.unwrap_or_else(|_| unreachable!()).0,
+                u16::from(case) + EC_TEMP_SENSOR_OFFSET
+            );
+        }
+
+        assert!(matches!(
+            Result::<KelvinTemp, EcTempSensorError>::from(EcTemp(0xFF)),
+            Err(EcTempSensorError::NotPresent)
+        ));
+        assert!(matches!(
+            Result::<KelvinTemp, EcTempSensorError>::from(EcTemp(0xFE)),
+            Err(EcTempSensorError::Error)
+        ));
+        assert!(matches!(
+            Result::<KelvinTemp, EcTempSensorError>::from(EcTemp(0xFD)),
+            Err(EcTempSensorError::NotPowered)
+        ));
+        assert!(matches!(
+            Result::<KelvinTemp, EcTempSensorError>::from(EcTemp(0xFC)),
+            Err(EcTempSensorError::NotCalibrated)
+        ));
+    }
+
+    #[test]
+    fn test_kelvin_to_celsius() {
+        let test_cases = [(273, 0), (300, 27), (200, -73), (0, -273)];
+
+        for (kelvin, expected_celsius) in test_cases {
+            let celsius: CelsiusTemp = KelvinTemp(kelvin).into();
+            assert_eq!(celsius.0, expected_celsius);
+        }
+    }
 
     #[test]
     fn test_maxima_consistency() {

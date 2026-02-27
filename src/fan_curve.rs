@@ -228,10 +228,11 @@ pub struct FanProfile {
 }
 
 impl FanProfile {
-    pub fn get_fan_speed(&self, temp: u8) -> u8 {
+    pub fn get_fan_speed<T: Into<EcTemp>>(&self, temp: T) -> u8 {
+        let temp: EcTemp = temp.into();
         let start: u8 = self.start + 73;
         let end: u8 = self.end + 73;
-        let index = (temp.clamp(start, end) - start) as usize;
+        let index = (temp.0.clamp(start, end) - start) as usize;
         self.lut[index]
     }
 }

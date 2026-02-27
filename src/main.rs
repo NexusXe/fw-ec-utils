@@ -12,6 +12,7 @@ mod fans;
 mod temp;
 
 use clap::Parser;
+use std::convert::Into;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -70,12 +71,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_temp_idx = temps.iter().enumerate().max_by_key(|&(_, &t)| t).unwrap().0;
         println!("--- Thermal Readings ---");
         for (i, t) in temps.iter().enumerate() {
-            match t {
-                0xFF => println!("Sensor {i}: Not present"),
-                0xFE => println!("Sensor {i}: Error"),
-                0xFD => println!("Sensor {i}: Not powered"),
-                0xFC => println!("Sensor {i}: Not calibrated"),
-                val => {
+            match t.get() {
+                Ok(val) => {
                     //let celsius = i32::from(val) + 200 - 273;
                     println!(
                         "Sensor {i}: {:}°C ({val:}, 0b{val:08b}){}",
@@ -83,6 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if i == max_temp_idx { "*" } else { "" }
                     );
                 }
+                Err(e) => println!("Sensor {i}: {e}"),
             }
         }
     } else if let Some(val) = args.fan {
@@ -99,7 +97,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_temp = temp::get_max_temp()?;
         let speed = profile.get_fan_speed(max_temp);
         fans::set_duty(speed)?;
-        println!("{:}°C: {speed:3}%", max_temp - 73);
+        println!(
+            "{:}°C: {speed:3}%",
+            Into::<Result<temp::CelsiusTemp, temp::EcTempSensorError>>::into(max_temp)
+                .unwrap_or_else(|e| {
+                    eprintln!("{e}");
+                    temp::CelsiusTemp::default()
+                })
+                .0
+        );
     } else if args.daemon {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -115,7 +121,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let max_temp = temp::get_max_temp()?;
             let speed = profile.get_fan_speed(max_temp);
             fans::set_duty(speed)?;
-            println!("{:}°C: {speed:3}%", max_temp - 73);
+            println!(
+                "{:}°C: {speed:3}%",
+                Into::<Result<temp::CelsiusTemp, temp::EcTempSensorError>>::into(max_temp)
+                    .unwrap_or_else(|e| {
+                        eprintln!("{e}");
+                        temp::CelsiusTemp::default()
+                    })
+                    .0
+            );
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
 
@@ -125,8 +139,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Set auto fan control.");
     } else if args.curve {
         println!("Temperature,PWM");
-        for temp in 0..=u8::MAX {
-            println!("{:},{:}", i16::from(temp) - 73, profile.get_fan_speed(temp));
+        for temp in 0..=u8::MAX - 4 {
+            let temp = temp::EcTemp(temp);
+            println!(
+                "{:},{:}",
+                Into::<Result<temp::CelsiusTemp, temp::EcTempSensorError>>::into(temp)
+                    .unwrap_or_else(|e| {
+                        eprintln!("{e}");
+                        temp::CelsiusTemp::default()
+                    })
+                    .0,
+                profile.get_fan_speed(temp)
+            );
         }
     } else if args.total_lut_size {
         let total_lut_size: usize = fan_curve::PROFILES.iter().map(|p| p.lut.len()).sum();
