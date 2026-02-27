@@ -37,6 +37,10 @@ struct Args {
     #[arg(long)]
     curve: bool,
 
+    /// Fan curve profile to use
+    #[arg(short = 'p', long, default_value = "default")]
+    profile: String,
+
     /// Generate shell completions
     #[arg(long, value_enum)]
     print_completions: Option<clap_complete::Shell>,
@@ -51,6 +55,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         clap_complete::generate(shell, &mut cmd, "fw-fanctrl-rs", &mut std::io::stdout());
         return Ok(());
     }
+
+    let profile = fan_curve::get_profile_by_name(&args.profile).unwrap_or_else(|| {
+        eprintln!("Profile '{}' not found, using default.", args.profile);
+        fan_curve::get_profile_by_name("default").unwrap()
+    });
 
     if args.temp {
         let temps = temp::get_temperatures()?;
@@ -84,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if args.once {
         // check temps and set fans to match curve
         let max_temp = temp::get_max_temp()?;
-        let speed = fan_curve::get_fan_speed(max_temp);
+        let speed = profile.get_fan_speed(max_temp);
         fans::set_duty(speed)?;
         println!("{:}°C: {speed:3}%", max_temp - 73);
     } else if args.daemon {
@@ -100,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         while running.load(Ordering::SeqCst) {
             let max_temp = temp::get_max_temp()?;
-            let speed = fan_curve::get_fan_speed(max_temp);
+            let speed = profile.get_fan_speed(max_temp);
             fans::set_duty(speed)?;
             println!("{:}°C: {speed:3}%", max_temp - 73);
             std::thread::sleep(std::time::Duration::from_secs(1));
@@ -113,11 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if args.curve {
         println!("Temperature,PWM");
         for temp in 0..=u8::MAX {
-            println!(
-                "{:},{:}",
-                i16::from(temp) - 73,
-                fan_curve::get_fan_speed(temp)
-            );
+            println!("{:},{:}", i16::from(temp) - 73, profile.get_fan_speed(temp));
         }
     } else {
         let mut cmd = Args::command();

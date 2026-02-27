@@ -1,14 +1,6 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::too_many_lines)]
 
-const MINIMUM_FAN_SPEED: u8 = 10;
-
-// (Temperature, Fan Speed)
-const START_POINT: (u8, u8) = (25, MINIMUM_FAN_SPEED);
-const END_POINT: (u8, u8) = (85, 100);
-
-const NUM_LUT_ENTRIES: usize = (END_POINT.0 - START_POINT.0 + 1) as usize;
-
 const fn abs(x: i64) -> i64 {
     if x < 0 { -x } else { x }
 }
@@ -58,11 +50,11 @@ const fn slope(p1: (u8, u8), p2: (u8, u8)) -> i64 {
 /// * `start` - The (x, y) start point of the curve. Inputs below `x` clamp to `0`.
 /// * `end` - The (x, y) end point of the curve. Inputs above `x` clamp to `100`.
 /// * `intermediates` - An array of arbitrary interior points.
-pub const fn generate_fan_curve_lut<const N: usize>(
+pub const fn generate_fan_curve_lut<const N: usize, const LUT_SIZE: usize>(
     start: (u8, u8),
     end: (u8, u8),
     intermediates: &[(u8, u8); N],
-) -> [u8; NUM_LUT_ENTRIES]
+) -> [u8; LUT_SIZE]
 where
     [(); N + 2]:,
 {
@@ -147,7 +139,11 @@ where
         i += 1;
     }
 
-    let mut lut = [0u8; NUM_LUT_ENTRIES];
+    assert!(
+        LUT_SIZE == (end.0 - start.0 + 1) as usize,
+        "LUT_SIZE must match the X range"
+    );
+    let mut lut = [0u8; LUT_SIZE];
     let mut lut_idx = 0usize;
 
     // x traverses from `shifted_start.0` to `shifted_end.0`
@@ -224,16 +220,67 @@ where
     lut
 }
 
-// Intermediate control points. (Must be strictly increasing in X).
-const INTERMEDIATE_POINTS: [(u8, u8); 4] = [(30, 15), (45, 30), (60, 50), (75, 80)];
+pub struct FanProfile {
+    pub name: &'static str,
+    pub start: u8,
+    pub end: u8,
+    pub lut: &'static [u8],
+}
 
-// Generate the fully smoothed LUT at compile-time
-pub const FAN_LUT: [u8; NUM_LUT_ENTRIES] =
-    generate_fan_curve_lut(START_POINT, END_POINT, &INTERMEDIATE_POINTS);
+impl FanProfile {
+    pub fn get_fan_speed(&self, temp: u8) -> u8 {
+        let start: u8 = self.start + 73;
+        let end: u8 = self.end + 73;
+        let index = (temp.clamp(start, end) - start) as usize;
+        self.lut[index]
+    }
+}
 
-pub const fn get_fan_speed(temp: u8) -> u8 {
-    const START: u8 = START_POINT.0 + 73;
-    const END: u8 = END_POINT.0 + 73;
-    let index = (temp.clamp(START, END) - START) as usize;
-    FAN_LUT[index]
+const DEFAULT_START: (u8, u8) = (25, 10);
+const DEFAULT_END: (u8, u8) = (85, 100);
+const DEFAULT_INTERMEDIATES: [(u8, u8); 4] = [(30, 15), (45, 30), (60, 50), (75, 80)];
+const DEFAULT_LUT: [u8; (DEFAULT_END.0 - DEFAULT_START.0 + 1) as usize] =
+    generate_fan_curve_lut(DEFAULT_START, DEFAULT_END, &DEFAULT_INTERMEDIATES);
+
+pub const DEFAULT_PROFILE: FanProfile = FanProfile {
+    name: "default",
+    start: DEFAULT_START.0,
+    end: DEFAULT_END.0,
+    lut: &DEFAULT_LUT,
+};
+
+const QUIET_START: (u8, u8) = (30, 10);
+const QUIET_END: (u8, u8) = (90, 100);
+const QUIET_INTERMEDIATES: [(u8, u8); 4] = [(35, 15), (50, 25), (65, 40), (80, 60)];
+const QUIET_LUT: [u8; (QUIET_END.0 - QUIET_START.0 + 1) as usize] =
+    generate_fan_curve_lut(QUIET_START, QUIET_END, &QUIET_INTERMEDIATES);
+
+pub const QUIET_PROFILE: FanProfile = FanProfile {
+    name: "quiet",
+    start: QUIET_START.0,
+    end: QUIET_END.0,
+    lut: &QUIET_LUT,
+};
+
+const PERFORMANCE_START: (u8, u8) = (25, 15);
+const PERFORMANCE_END: (u8, u8) = (80, 100);
+const PERFORMANCE_INTERMEDIATES: [(u8, u8); 4] = [(35, 30), (50, 50), (65, 75), (75, 100)];
+const PERFORMANCE_LUT: [u8; (PERFORMANCE_END.0 - PERFORMANCE_START.0 + 1) as usize] =
+    generate_fan_curve_lut(
+        PERFORMANCE_START,
+        PERFORMANCE_END,
+        &PERFORMANCE_INTERMEDIATES,
+    );
+
+pub const PERFORMANCE_PROFILE: FanProfile = FanProfile {
+    name: "performance",
+    start: PERFORMANCE_START.0,
+    end: PERFORMANCE_END.0,
+    lut: &PERFORMANCE_LUT,
+};
+
+pub const PROFILES: &[FanProfile] = &[DEFAULT_PROFILE, QUIET_PROFILE, PERFORMANCE_PROFILE];
+
+pub fn get_profile_by_name(name: &str) -> Option<&'static FanProfile> {
+    PROFILES.iter().find(|p| p.name == name)
 }
