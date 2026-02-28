@@ -4,10 +4,10 @@ Description=Framework Fan Controller Daemon
 BindsTo=user@%i.service
 # Wait for the user session to fully initialize before starting
 After=user@%i.service
-ExecStopPost=/usr/local/bin/fw-fanctrl-rs -f
 
 [Service]
 Type=simple
+ExecStopPost=/usr/local/bin/fw-fanctrl-rs -f
 
 ExecStart=/usr/local/bin/fw-fanctrl-rs --daemon
 CPUSchedulingPolicy=fifo
