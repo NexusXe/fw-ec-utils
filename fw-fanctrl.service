@@ -1,0 +1,21 @@
+[Unit]
+Description=Framework Fan Controller Daemon (Rust)
+# Stop this service if the user session is terminated
+BindsTo=user@%i.service
+# Wait for the user session to fully initialize before starting
+After=user@%i.service
+ExecStopPost=/usr/local/bin/fw-fanctrl-rs -f
+
+[Service]
+Type=simple
+
+ExecStart=/usr/local/bin/fw-fanctrl-rs --daemon
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=1
+
+Restart=on-failure
+RestartSec=3
+
+[Install]
+# Start this service when the user logs in
+WantedBy=user@%i.service
