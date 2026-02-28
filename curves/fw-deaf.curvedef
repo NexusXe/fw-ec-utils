@@ -1,0 +1,8 @@
+# Based on https://github.com/TamtamHero/fw-fanctrl/blob/main/src/fw_fanctrl/_resources/config.json
+
+fw-deaf
+
+0,20
+40,30
+50,50
+60,100

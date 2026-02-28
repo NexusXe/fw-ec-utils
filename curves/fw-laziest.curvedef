@@ -1,0 +1,9 @@
+# Based on https://github.com/TamtamHero/fw-fanctrl/blob/main/src/fw_fanctrl/_resources/config.json
+
+fw-laziest
+
+45,0
+65,25
+70,35
+75,50
+85,100

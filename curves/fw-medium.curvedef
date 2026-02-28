@@ -1,0 +1,9 @@
+# Based on https://github.com/TamtamHero/fw-fanctrl/blob/main/src/fw_fanctrl/_resources/config.json
+
+fw-medium
+
+40,15
+60,30
+70,40
+75,80
+85,100

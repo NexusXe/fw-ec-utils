@@ -1,0 +1,30 @@
+# $XDG_CONFIG_HOME/fw-fanctrl-rs/curves/example-curve.curvedef
+
+# name the curve whatever you want, the first line is the name so go wild
+ExampleCurve
+
+# format: temp,pwm
+# temp is in Celsius, -73C to 181C, pwm is 0-100
+# the curve will be interpolated between these points
+# the curve will be clamped between the min and max temp
+
+
+# example curve, however poor it may be
+# for this curve, values below -10c will be treated as -10c and thus 10% fan speed
+-10,10
+
+# however many intermediate points you want
+# note that horizontal segments are NOT allowed; every point must be at least 1
+# percent higher than the previous and at least 1 percent lower than the next
+
+# also note that they must be sorted by temperature
+10,15
+11,17
+60,50
+70,100
+
+# for this curve, values above 100c will be treated as 100c and thus 100% fan speed
+100,100
+
+# at first discovery, this curve will be "compiled" and cached to /var/cache/fw-fanctrl-rs/curvecache/CURVE_HASH.bin
+# (if it can't be aliased to a pre-existing curve)
