@@ -1,5 +1,5 @@
 [Unit]
-Description=Framework Fan Controller Daemon (Rust)
+Description=Framework Fan Controller Daemon
 # Stop this service if the user session is terminated
 BindsTo=user@%i.service
 # Wait for the user session to fully initialize before starting
