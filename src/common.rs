@@ -13,7 +13,7 @@ pub(crate) fn cros_ec() -> &'static File {
             .read(true)
             .write(true)
             .open("/dev/cros_ec")
-            .expect("Failed to open /dev/cros_ec. Are you running as root?")
+            .expect("[ERROR]: Failed to open /dev/cros_ec. Are you running as root?")
     })
 }
 
