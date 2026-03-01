@@ -151,7 +151,6 @@ struct Args {
         conflicts_with = "curve",
         conflicts_with = "total_lut_size",
         conflicts_with = "list_external_curves",
-        requires = "daemon",
     )]
     r#use: Option<String>,
 
@@ -166,7 +165,6 @@ struct Args {
         conflicts_with = "total_lut_size",
         conflicts_with = "list_external_curves",
         conflicts_with = "use",
-        requires = "daemon",
     )]
     r#use_default: Option<String>,
 }
