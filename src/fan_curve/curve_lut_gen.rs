@@ -17,7 +17,8 @@ const fn slope(p1: (u8, u8), p2: (u8, u8)) -> FanCurveFloat {
     dy / dx
 }
 
-/// Generates a perfectly smoothed, overshoot-free spline fan curve lookup table.
+/// Generates a perfectly smoothed, overshoot-free spline fan curve lookup table
+/// that I totally 100% wrote myself. Trust.
 ///
 /// # Arguments
 /// * `points` - An array of (`temp`, `fan_speed`) points defining the curve, in strictly

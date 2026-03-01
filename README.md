@@ -10,6 +10,16 @@ A lightweight, pure-Rust daemon for custom fan control on Framework laptops.
 
 This project interfaces directly with the ChromeOS Embedded Controller (`/dev/cros_ec`) via ioctl commands to provide responsive, customizable thermal management. It serves as a highly performant, compiled alternative to script-based fan controllers.
 
+## Disclaimer
+
+I am not responsible for any damage (physical, social, geopolitical, or otherwise) that may result from the use of this software.
+
+This software has only been tested on:
+ - Framework 16 (AMD Ryzen AI 300 Series)
+ - Framework 13 (AMD Ryzen AI 300 Series)
+
+Might it work on other Framework laptops? Maybe! I don't know! I don't have other Framework laptops! Heck, it might even work on Chromebooks! Who knows! You are, of course, more than welcome to try it out and report back, and maybe even open a pull request to support your device.
+
 ## Features
 
 * **Written in Rust**: A compiled binary with fast lookups and a small system footprint.
@@ -39,14 +49,11 @@ paru -S fw-fanctrl-rs-git
 This project requires the nightly Rust toolchain.
 
 ```bash
-git clone [https://github.com/NexusXe/fw-fanctrl-rs.git](https://github.com/NexusXe/fw-fanctrl-rs.git)
+git clone https://github.com/NexusXe/fw-fanctrl-rs.git
 cd fw-fanctrl-rs
 cargo +nightly build --release
 sudo make install
 ```
-
-
-Note: The Makefile installs the binary to /usr/local/bin and copies the service file accordingly.
 
 ## Configuration
 
@@ -101,13 +108,13 @@ systemctl status fw-fanctrl@$(id -u).service
 To enable and start the service on boot:
 
 ```fish
-sudo systemctl enable --now fw-fanctrl@$(id -u).service
+sudo systemctl enable --now fw-fanctrl@(id -u).service
 ```
 
 To check the current status of the daemon:
 
 ```fish
-systemctl status fw-fanctrl@$(id -u).service
+systemctl status fw-fanctrl@(id -u).service
 ```
 </details><br>
 
@@ -123,7 +130,7 @@ sudo journalctl -u fw-fanctrl@$(id -u).service -f
 
 I've been using [fw-fanctrl](https://github.com/TamtamHero/fw-fanctrl) for a while now, and it gets the job done. However, having a Python script constantly looping in the background has always bugged me, so I decided to rewrite it in Rust. In addition, instead of spawning new processes every tick to read temps and set fan speeds, this program uses ioctls to communicate with the EC directly, which is hypothetically better.
 
-I will note that this program has presicsely no hysteresis compensation whatsoever, which has been fine for my use cases. Feel free to make a PR if you want to add it.
+I will note that this program has precisely no hysteresis compensation whatsoever, which has been fine for my use cases. Feel free to make a PR if you want to add it.
 
 ### Why Rust?
 
@@ -136,3 +143,7 @@ The default external fan curves provided in this package were inspired by the th
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 or later. See [LICENSE](LICENSE) for more details.
+
+## Contributing
+
+Feel free to open an issue or make a pull request. I'm not picky.
