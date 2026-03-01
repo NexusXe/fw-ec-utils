@@ -404,7 +404,7 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
 
     // ensure the new curve exists in either the built-in profiles or external curves
     if fan_curve::get_profile_by_name(new_curve, profiles).is_none() {
-        return Err(format!("Could not find curve \"{new_curve}\".").into());
+        return Err(format!("[ERROR]: Could not find curve \"{new_curve}\".").into());
     }
 
     if NEW_DEFAULT {
@@ -417,12 +417,12 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
         match std::fs::write(DEFAULT_CONFIG_PATH, config) {
             Ok(()) => info!("Set \"{new_curve}\" as the new default curve."),
             Err(e) => {
-                println!("[ERROR]: Failed to set \"{new_curve}\" as the new default curve.");
+                eprintln!("[ERROR]: Failed to set \"{new_curve}\" as the new default curve.");
                 match e.kind() {
                     std::io::ErrorKind::PermissionDenied => {
-                        println!("Permission denied. Are you running as root?");
+                        return Err("[ERROR]: Permission denied. Are you running as root?".into());
                     }
-                    _ => println!("Error: {e}"),
+                    _ => return Err(e.to_string().into()),
                 }
             }
         }
@@ -431,12 +431,12 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
         match std::fs::write(Path::new(USE_ONCE_PATH), new_curve) {
             Ok(()) => info!("Set \"{new_curve}\" as the curve to use once."),
             Err(e) => {
-                println!("[ERROR]: Failed to set \"{new_curve}\" as the curve to use once.");
+                eprintln!("[ERROR]: Failed to set \"{new_curve}\" as the curve to use once.");
                 match e.kind() {
                     std::io::ErrorKind::PermissionDenied => {
-                        println!("Permission denied. Are you running as root?");
+                        return Err("[ERROR]: Permission denied. Are you running as root?".into());
                     }
-                    _ => println!("Error: {e}"),
+                    _ => return Err(e.to_string().into()),
                 }
             }
         }
@@ -451,6 +451,6 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
         info!("Daemon successfully restarted.");
         Ok(())
     } else {
-        Err(format!("Failed to restart daemon. It may not be running. Try checking: systemctl status {service_name}").into())
+        Err(format!("[ERROR]: Failed to restart daemon. It may not be running. Try checking: systemctl status {service_name}").into())
     }
 }
