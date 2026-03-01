@@ -14,6 +14,11 @@ pub(crate) const EC_TEMP_SENSOR_OFFSET: u16 = 200;
 pub(crate) const KELVIN_CELSIUS_OFFSET: u16 = 273;
 pub(crate) const EC_TEMP_SENSOR_OFFSET_CELSIUS: u16 = KELVIN_CELSIUS_OFFSET - EC_TEMP_SENSOR_OFFSET;
 
+#[allow(unused)]
+pub(crate) const MIN_TEMP_CELSIUS: i16 = -73;
+#[allow(unused)]
+pub(crate) const MAX_TEMP_CELSIUS: i16 = 181;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) struct ValidEcTemp(pub(crate) u8);
 

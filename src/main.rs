@@ -14,11 +14,9 @@ mod fan_curve;
 mod fans;
 mod temp;
 
-use clap::Parser;
-use std::{path::Path, sync::OnceLock};
-
+use clap::{CommandFactory, Parser};
 use serde::Deserialize;
-use std::fs;
+use std::{fs, path::Path, sync::OnceLock};
 
 #[derive(Deserialize)]
 struct Config {
@@ -100,7 +98,7 @@ struct Args {
     sleep_millis: u64,
 
     /// Check temps and set fans to match curve once
-    #[arg(short = 'o', long)]
+    #[arg(short = 'O', long)]
     once: bool,
 
     /// Print fan curve in CSV format
@@ -174,7 +172,6 @@ struct Args {
 
 #[allow(clippy::too_many_lines)] // too bad!
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use clap::CommandFactory;
     let mut args = Args::parse();
     if args.quiet {
         QUIET.set(true).unwrap();
@@ -185,11 +182,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut config_default = None;
 
+    let mut profiles = fan_curve::curve_parsing::get_all_external_curves();
+    profiles.extend(fan_curve::BUILTIN_PROFILES.iter().cloned());
+
     if let Some(profile) = args.r#use {
-        restart_daemon::<false>(&profile)?;
+        restart_daemon::<false>(&profile, &profiles)?;
         return Ok(());
     } else if let Some(profile) = args.use_default {
-        restart_daemon::<true>(&profile)?;
+        restart_daemon::<true>(&profile, &profiles)?;
         return Ok(());
     }
 
@@ -232,13 +232,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let external_curves = fan_curve::curve_parsing::get_all_external_curves();
-
-    let profile = fan_curve::get_profile_by_name(&args.profile, Some(&external_curves))
+    let profile = fan_curve::get_profile_by_name(&args.profile, &profiles)
         .unwrap_or_else(|| {
             warn!("Profile '{}' not found, using default.", args.profile);
-            fan_curve::get_profile_by_name("default", None).unwrap()
-        });
+            fan_curve::get_profile_by_name("default", &profiles).expect("Default profile not found")
+        })
+        .to_owned();
+
+    if args.plot {
+        let path = Path::new(&args.out);
+        return plot::plot_curves(path, &profiles, args.force_sixel, args.force_kitty);
+    }
+
+    // explicitly drop the rest of the profiles
+    drop(profiles);
 
     if args.temp {
         print_temps()?;
@@ -258,7 +265,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fans::set_duty(speed)?;
         println!("[OUT]: {:}°C: {speed:3}%", max_temp.to_celsius().0);
     } else if args.daemon {
-        run_daemon(profile, &args)?;
+        run_daemon(&profile, &args)?;
     } else if args.curve {
         println!("[OUT]: {profile}");
         // don't prefix with [OUT] for the CSV
@@ -350,6 +357,7 @@ fn run_daemon(
 
 fn restart_daemon<const NEW_DEFAULT: bool>(
     new_curve: &str,
+    profiles: &[fan_curve::FanProfile],
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::env;
     use std::process::Command;
@@ -360,9 +368,7 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
     info!("Applying \"{new_curve}\" curve and restarting {service_name}...");
 
     // ensure the new curve exists in either the built-in profiles or external curves
-    let external_curves = fan_curve::curve_parsing::get_all_external_curves();
-    let curve_exists = fan_curve::get_profile_by_name(new_curve, Some(&external_curves)).is_some();
-    if !curve_exists {
+    if fan_curve::get_profile_by_name(new_curve, profiles).is_none() {
         return Err(format!("Could not find curve \"{new_curve}\".").into());
     }
 
@@ -371,7 +377,7 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
         let config = std::fs::read_to_string(DEFAULT_CONFIG_PATH)?;
         let config = config.replace(
             "default_curve = \"default\"",
-            &format!("default_curve = \"{new_curve}\""),
+            &format!("default_curve = \"{new_curve}\" # Set by fw-fanctrl-rs --use-default"),
         );
         std::fs::write(DEFAULT_CONFIG_PATH, config)?;
         info!("Set \"{new_curve}\" as the new default curve.");

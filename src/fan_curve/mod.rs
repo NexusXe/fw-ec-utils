@@ -4,7 +4,6 @@
 use crate::{
     info,
     temp::{CelsiusTemp, EC_TEMP_SENSOR_OFFSET_CELSIUS, UnvalidatedEcTemp, ValidEcTemp},
-    warn,
 };
 
 use std::borrow::Cow;
@@ -15,6 +14,7 @@ mod curve_lut_gen;
 use curve_lut_gen::generate_fan_curve_lut;
 
 /// A fan curve profile, either built-in or user-defined.
+#[derive(Clone)]
 pub(crate) struct FanProfile {
     /// Human-readable curve name
     pub name: Cow<'static, str>,
@@ -144,25 +144,13 @@ pub(crate) const fn flatten_points(points: &[(u8, u8)]) -> &[u8] {
 
 pub(crate) fn get_profile_by_name<'a>(
     name: &str,
-    external_profiles: Option<&'a [FanProfile]>,
+    profiles: &'a [FanProfile],
 ) -> Option<&'a FanProfile> {
-    if let Some(profile) = BUILTIN_PROFILES.iter().find(|p| p.name == name) {
+    if let Some(profile) = profiles.iter().find(|p| p.name == name) {
         Some(profile)
     } else {
-        info!("Profile \"{name}\" not in built-in profiles.");
-        if let Some(external_profiles) = external_profiles {
-            info!("Checking external profiles for \"{name}\"...");
-            if let Some(profile) = external_profiles.iter().find(|p| p.name == name) {
-                info!("Found profile \"{name}\" in external profiles.");
-                Some(profile)
-            } else {
-                warn!("Profile \"{name}\" not in external profiles.");
-                None
-            }
-        } else {
-            warn!("No external profiles provided to check.");
-            None
-        }
+        info!("Profile \"{name}\" not found.");
+        None
     }
 }
 
