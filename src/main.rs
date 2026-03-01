@@ -157,7 +157,9 @@ struct Args {
     )]
     r#use: Option<String>,
 
-    /// Restart the daemon using a custom curve, also setting it as the new default
+    /// Restart the daemon using a custom curve, also setting it as the new default.
+    ///
+    /// This will overwrite the default curve in the **default** config file at /etc/fw-fanctrl-rs/config.toml.
     #[arg(
         short = 'U',
         long,
@@ -412,12 +414,32 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
             "default_curve = \"default\"",
             &format!("default_curve = \"{new_curve}\" # Set by fw-fanctrl-rs --use-default"),
         );
-        std::fs::write(DEFAULT_CONFIG_PATH, config)?;
-        info!("Set \"{new_curve}\" as the new default curve.");
+        match std::fs::write(DEFAULT_CONFIG_PATH, config) {
+            Ok(()) => info!("Set \"{new_curve}\" as the new default curve."),
+            Err(e) => {
+                println!("[ERROR]: Failed to set \"{new_curve}\" as the new default curve.");
+                match e.kind() {
+                    std::io::ErrorKind::PermissionDenied => {
+                        println!("Permission denied. Are you running as root?")
+                    }
+                    _ => println!("Error: {e}"),
+                }
+            }
+        }
     } else {
         // write the curve
-        std::fs::write(Path::new(USE_ONCE_PATH), new_curve)?;
-        infov!("Set \"{new_curve}\" as the curve to use once.");
+        match std::fs::write(Path::new(USE_ONCE_PATH), new_curve) {
+            Ok(()) => info!("Set \"{new_curve}\" as the curve to use once."),
+            Err(e) => {
+                println!("[ERROR]: Failed to set \"{new_curve}\" as the curve to use once.");
+                match e.kind() {
+                    std::io::ErrorKind::PermissionDenied => {
+                        println!("Permission denied. Are you running as root?")
+                    }
+                    _ => println!("Error: {e}"),
+                }
+            }
+        }
     }
 
     let status = Command::new("systemctl")
