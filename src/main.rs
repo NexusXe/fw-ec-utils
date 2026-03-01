@@ -180,6 +180,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         VERBOSE.set(true).unwrap();
     }
 
+    let mut config_default = None;
+
+    match load_config(&args.config) {
+        Ok(config) => {
+            infov!("Loaded config from {}", args.config);
+            args.profile.clone_from(&config.default_curve);
+            config_default = Some(config.default_curve);
+            infov!("    Using default profile: {}", args.profile);
+            args.sleep_millis = config.poll_interval_ms;
+            infov!("    Using poll interval: {}ms", args.sleep_millis);
+        }
+        Err(e) => {
+            warn!("Failed to load config: {e}");
+        }
+    }
+
+    let config_default = config_default.unwrap_or_else(|| "default".to_string());
+
     if args.profile == "default-or-use-once" {
         let use_once_path = Path::new(USE_ONCE_PATH);
         if use_once_path.exists() {
@@ -187,20 +205,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // remove the use-once file
             std::fs::remove_file(use_once_path)?;
         } else {
-            args.profile = "default".to_string();
-        }
-    }
-
-    match load_config(&args.config) {
-        Ok(config) => {
-            infov!("Loaded config from {}", args.config);
-            args.profile = config.default_curve;
-            infov!("    Using default profile: {}", args.profile);
-            args.sleep_millis = config.poll_interval_ms;
-            infov!("    Using poll interval: {}ms", args.sleep_millis);
-        }
-        Err(e) => {
-            warn!("Failed to load config: {e}");
+            args.profile = config_default;
         }
     }
 
