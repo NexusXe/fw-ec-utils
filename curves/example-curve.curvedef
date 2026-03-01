@@ -1,4 +1,4 @@
-# $XDG_CONFIG_HOME/fw-fanctrl-rs/curves/example-curve.curvedef
+# /etc/fw-fanctrl-rs/curves/example-curve.curvedef
 
 # name the curve whatever you want, the first line is the name so go wild
 ExampleCurve
