@@ -1,0 +1,3 @@
+# /etc/fw-fanctrl-rs/config.toml
+default_curve = "default"
+poll_interval_ms = 1000

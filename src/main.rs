@@ -15,7 +15,24 @@ mod fans;
 mod temp;
 
 use clap::Parser;
-use std::sync::OnceLock;
+use std::{path::Path, sync::OnceLock};
+
+use serde::Deserialize;
+use std::fs;
+
+#[derive(Deserialize)]
+struct Config {
+    default_curve: String,
+    poll_interval_ms: u64,
+}
+
+const DEFAULT_CONFIG_PATH: &str = "/etc/fw-fanctrl-rs/config.toml";
+const USE_ONCE_PATH: &str = "/etc/fw-fanctrl-rs/.use-once.tmp";
+
+fn load_config(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
+    let config_str = fs::read_to_string(path)?;
+    toml::from_str(&config_str).map_err(Into::into)
+}
 
 static QUIET: OnceLock<bool> = OnceLock::new();
 static VERBOSE: OnceLock<bool> = OnceLock::new();
@@ -89,7 +106,7 @@ struct Args {
     curve: bool,
 
     /// Fan curve profile to use
-    #[arg(short = 'p', long, default_value = "default")]
+    #[arg(short = 'p', long, default_value = "default-or-use-once")]
     profile: String,
 
     /// Generate shell completions
@@ -109,19 +126,84 @@ struct Args {
     quiet: bool,
 
     /// List external curves
-    #[arg(long)]
+    #[arg(
+        long,
+        conflicts_with = "once",
+        conflicts_with = "daemon",
+        conflicts_with = "fan",
+        conflicts_with = "temp",
+        conflicts_with = "curve",
+        conflicts_with = "total_lut_size"
+    )]
     list_external_curves: bool,
+
+    /// Custom config path
+    #[arg(short = 'c', long, default_value = DEFAULT_CONFIG_PATH)]
+    config: String,
+
+    /// Restart the daemon using a custom curve
+    #[arg(
+        short = 'u',
+        long,
+        conflicts_with = "once",
+        conflicts_with = "fan",
+        conflicts_with = "temp",
+        conflicts_with = "curve",
+        conflicts_with = "total_lut_size",
+        conflicts_with = "list_external_curves",
+        requires = "daemon",
+    )]
+    r#use: Option<String>,
+
+    /// Restart the daemon using a custom curve, also setting it as the new default
+    #[arg(
+        short = 'U',
+        long,
+        conflicts_with = "once",
+        conflicts_with = "fan",
+        conflicts_with = "temp",
+        conflicts_with = "curve",
+        conflicts_with = "total_lut_size",
+        conflicts_with = "list_external_curves",
+        conflicts_with = "use",
+        requires = "daemon",
+    )]
+    r#use_default: Option<String>,
 }
 
 #[allow(clippy::too_many_lines)] // too bad!
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use clap::CommandFactory;
-    let args = Args::parse();
+    let mut args = Args::parse();
     if args.quiet {
         QUIET.set(true).unwrap();
     } else if args.verbose {
         // mutually exclusive with quiet
         VERBOSE.set(true).unwrap();
+    }
+
+    if args.profile == "default-or-use-once" {
+        let use_once_path = Path::new(USE_ONCE_PATH);
+        if use_once_path.exists() {
+            args.profile = std::fs::read_to_string(use_once_path)?;
+            // remove the use-once file
+            std::fs::remove_file(use_once_path)?;
+        } else {
+            args.profile = "default".to_string();
+        }
+    }
+
+    match load_config(&args.config) {
+        Ok(config) => {
+            infov!("Loaded config from {}", args.config);
+            args.profile = config.default_curve;
+            infov!("    Using default profile: {}", args.profile);
+            args.sleep_millis = config.poll_interval_ms;
+            infov!("    Using poll interval: {}ms", args.sleep_millis);
+        }
+        Err(e) => {
+            warn!("Failed to load config: {e}");
+        }
     }
 
     if let Some(shell) = args.print_completions {
@@ -183,6 +265,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for curve in curves {
             println!("[OUT]: {curve}");
         }
+    } else if let Some(profile) = args.r#use {
+        restart_daemon::<false>(&profile)?;
+    } else if let Some(profile) = args.use_default {
+        restart_daemon::<true>(&profile)?;
     } else {
         let mut cmd = Args::command();
         cmd.print_help()?;
@@ -246,4 +332,46 @@ fn run_daemon(
     fans::set_auto()?;
     info!("Set auto fan control.");
     Ok(())
+}
+
+fn restart_daemon<const NEW_DEFAULT: bool>(new_curve: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use std::process::Command;
+    use std::env;
+
+    let uid = env::var("SUDO_UID").unwrap_or_else(|_| String::from("1000"));
+    let service_name = format!("fw-fanctrl@{uid}.service");
+
+    info!("Applying \"{new_curve}\" curve and restarting {service_name}...");
+
+    // ensure the new curve exists in either the built-in profiles or external curves
+    let external_curves = fan_curve::curve_parsing::get_all_external_curves();
+    let curve_exists = fan_curve::get_profile_by_name(new_curve, Some(&external_curves)).is_some();
+    if !curve_exists {
+        return Err(format!("Could not find curve \"{new_curve}\".").into());
+    }
+
+    if NEW_DEFAULT {
+        // open the default config file and replace the line that specifies the default curve
+        let config = std::fs::read_to_string(DEFAULT_CONFIG_PATH)?;
+        let config = config.replace("default_curve = \"default\"", &format!("default_curve = \"{new_curve}\""));
+        std::fs::write(DEFAULT_CONFIG_PATH, config)?;
+        info!("Set \"{new_curve}\" as the new default curve.");
+    } else {
+        // write the curve to use once to /etc/fw-fanctrl-rs/.use-once.tmp
+        let use_once_path = Path::new(USE_ONCE_PATH);
+        std::fs::write(use_once_path, new_curve)?;
+        infov!("Set \"{new_curve}\" as the curve to use once.");
+    }
+
+    let status = Command::new("systemctl")
+        .arg("restart")
+        .arg(&service_name)
+        .status()?;
+
+    if status.success() {
+        info!("Daemon successfully restarted.");
+        Ok(())
+    } else {
+        Err(format!("Failed to restart daemon. It may not be running. Try checking: systemctl status {service_name}").into())
+    }
 }
