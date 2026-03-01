@@ -27,7 +27,7 @@ struct Config {
 }
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/fw-fanctrl-rs/config.toml";
-const USE_ONCE_PATH: &str = "/etc/fw-fanctrl-rs/.use-once.tmp";
+const USE_ONCE_PATH: &str = "/tmp/fw-fanctrl-rs.use-once.tmp";
 
 fn load_config(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
     let config_str = fs::read_to_string(path)?;
@@ -373,9 +373,8 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
         std::fs::write(DEFAULT_CONFIG_PATH, config)?;
         info!("Set \"{new_curve}\" as the new default curve.");
     } else {
-        // write the curve to use once to /etc/fw-fanctrl-rs/.use-once.tmp
-        let use_once_path = Path::new(USE_ONCE_PATH);
-        std::fs::write(use_once_path, new_curve)?;
+        // write the curve
+        std::fs::write(Path::new(USE_ONCE_PATH), new_curve)?;
         infov!("Set \"{new_curve}\" as the curve to use once.");
     }
 
