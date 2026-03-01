@@ -313,12 +313,10 @@ fn run_daemon(
     })
     .expect("[ERROR]: Error setting Ctrl-C handler");
 
-    if args.verbose {
-        info!(
-            "Starting daemon with profile \"{}\". Using {:}ms sleep.",
-            args.profile, args.sleep_millis
-        );
-    }
+    info!(
+        "Starting daemon with profile \"{}\". Using {:}ms sleep.",
+        args.profile, args.sleep_millis
+    );
 
     while running.load(Ordering::SeqCst) {
         let max_temp = temp::get_max_temp()?;
