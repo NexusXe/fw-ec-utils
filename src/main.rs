@@ -200,12 +200,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.profile == "default-or-use-once" {
         let use_once_path = Path::new(USE_ONCE_PATH);
         if use_once_path.exists() {
+            infov!("Use-once file found, using profile from file.");
             args.profile = std::fs::read_to_string(use_once_path)?;
             // remove the use-once file
             std::fs::remove_file(use_once_path)?;
         } else {
+            infov!("No use-once file found, using default profile.");
             args.profile = config_default;
         }
+    } else {
+        infov!("Using profile from command line: {}", args.profile);
     }
 
     if let Some(shell) = args.print_completions {
