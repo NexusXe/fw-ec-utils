@@ -197,7 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_default = config_default.unwrap_or_else(|| "default".to_string());
 
-    if args.profile == "default-or-use-once" {
+    if args.profile == "default-or-use-once" && args.r#use.is_none() && args.use_default.is_none() {
         let use_once_path = Path::new(USE_ONCE_PATH);
         if use_once_path.exists() {
             infov!("Use-once file found, using profile from file.");
