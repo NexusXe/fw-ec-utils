@@ -443,14 +443,14 @@ fn restart_daemon<const NEW_DEFAULT: bool>(
     }
 
     let status = Command::new("systemctl")
-        .arg("restart")
+        .arg("reload")
         .arg(&service_name)
         .status()?;
 
     if status.success() {
-        info!("Daemon successfully restarted.");
+        info!("Daemon successfully reloaded.");
         Ok(())
     } else {
-        Err(format!("[ERROR]: Failed to restart daemon. It may not be running. Try checking: systemctl status {service_name}").into())
+        Err(format!("[ERROR]: Failed to reload daemon. It may not be running. Try checking: systemctl status {service_name}").into())
     }
 }
