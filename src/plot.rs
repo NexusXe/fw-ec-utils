@@ -109,6 +109,9 @@ pub(super) fn plot_curves(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![0; (WIDTH * HEIGHT * 3) as usize];
 
+    // touch output file
+    std::fs::File::create(to_file)?;
+
     let support = match check_terminal_support() {
         Ok(s) => s,
         Err(e) => {
