@@ -205,7 +205,10 @@ pub(super) fn plot_curves(
     }
 
     if to_file.extension().is_some_and(|ext| ext == "svg") {
-        infov!("Drawing SVG fan curve plot to {}", to_file.canonicalize()?.display());
+        infov!(
+            "Drawing SVG fan curve plot to {}",
+            to_file.canonicalize()?.display()
+        );
         draw_chart!(SVGBackend::new(to_file, (WIDTH, HEIGHT)).into_drawing_area());
     }
     // still need to draw to buffer for kitty/sixel output
@@ -216,7 +219,10 @@ pub(super) fn plot_curves(
     );
 
     if to_file.extension().is_some_and(|ext| ext != "svg") {
-        infov!("Saving fan curve plot to {}...", to_file.canonicalize()?.display());
+        infov!(
+            "Saving fan curve plot to {}...",
+            to_file.canonicalize()?.display()
+        );
     }
 
     let using_kitty = (support.kitty || force_kitty) && !force_sixel;
@@ -261,7 +267,10 @@ pub(super) fn plot_curves(
     if !using_kitty && !using_sixel {
         infov!("Terminal doesn't seem to support Sixel or Kitty graphics.");
     }
-    println!("[OUT]: Image saved to {}", to_file.canonicalize()?.display());
+    println!(
+        "[OUT]: Image saved to {}",
+        to_file.canonicalize()?.display()
+    );
     Ok(())
 }
 
@@ -308,9 +317,10 @@ fn sixel(rgb_bytes: &[u8], width: u32, height: u32) -> Result<(), Box<dyn std::e
     use image::{ImageBuffer, Rgba, buffer::ConvertBuffer};
     let options = EncodeOptions {
         max_colors: 256,
-        diffusion: 0.0, // disable dithering
+        // high dithering doesn't really matter with this kind of graphic,
+        // but it makes the transparency behind the legend look a little better so w/e
+        diffusion: 1.0,
         quantize_method: QuantizeMethod::Wu,
-        ..
     };
 
     // icy_sixel needs RGBA, so convert :(
