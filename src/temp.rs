@@ -1,13 +1,14 @@
 use crate::{
     common::{
-        CROS_EC_FILE, CrosEcCommandV2, CrosEcReadmemV2, EcCmd, FullWriteV2Command,
-        cros_ec_readmem, fire,
+        CROS_EC_FILE, CrosEcCommandV2, CrosEcReadmemV2, EcCmd, FullWriteV2Command, cros_ec_readmem,
+        fire,
     },
     infov,
 };
 
 use std::{
-    ffi::c_char,
+    ffi::{CStr, c_char},
+    fmt::Display,
     os::fd::AsRawFd,
     simd::prelude::*,
     sync::{LazyLock, OnceLock},
@@ -34,7 +35,7 @@ const SIMD_CAPABLE_TEMP_SENSORS: usize = {
     2usize.pow(x)
 };
 
-type TempSensorVector = Simd<u8, SIMD_CAPABLE_TEMP_SENSORS>;
+pub(crate) type TempSensorVector = Simd<u8, SIMD_CAPABLE_TEMP_SENSORS>;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) struct ValidEcTemp(pub(crate) u8);
@@ -184,6 +185,34 @@ pub(crate) struct EcResponseTempSensorGetInfo {
     pub(crate) sensor_type: u8,
 }
 
+impl Display for EcResponseTempSensorGetInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name_cstr = unsafe { CStr::from_ptr(self.sensor_name.as_ptr()) };
+        let name = name_cstr.to_str().unwrap_or("<invalid UTF-8>");
+
+        let sensor_type = match self.sensor_type {
+            255 => "TEMP_SENSOR_TYPE_IGNORED",
+            0 => "TEMP_SENSOR_TYPE_CPU",
+            1 => "TEMP_SENSOR_TYPE_BOARD",
+            2 => "TEMP_SENSOR_TYPE_CASE",
+            3 => "TEMP_SENSOR_TYPE_BATTERY",
+            4 => "TEMP_SENSOR_TYPE_COUNT",
+            _ => "ERROR: BAD SENSOR TYPE",
+        };
+
+        write!(f, "{name} ({sensor_type})")
+    }
+}
+
+impl const Default for EcResponseTempSensorGetInfo {
+    fn default() -> Self {
+        Self {
+            sensor_name: [0; 32],
+            sensor_type: 255,
+        }
+    }
+}
+
 #[repr(C)]
 pub(crate) union TempSensorPayload {
     pub(crate) params: EcParamsTempSensorGetInfo,
@@ -193,7 +222,8 @@ pub(crate) union TempSensorPayload {
 type GetTempSensorInfoCommand = FullWriteV2Command<TempSensorPayload>;
 
 /// Cache of sensor info responses
-pub(crate) static SENSOR_CACHE: [OnceLock<EcResponseTempSensorGetInfo>; EC_TEMP_SENSOR_ENTRIES] = [const { OnceLock::new() }; EC_TEMP_SENSOR_ENTRIES];
+pub(crate) static SENSOR_CACHE: [OnceLock<EcResponseTempSensorGetInfo>; EC_TEMP_SENSOR_ENTRIES] =
+    [const { OnceLock::new() }; EC_TEMP_SENSOR_ENTRIES];
 
 pub(crate) fn probe_sensor(
     id: u8,
@@ -233,7 +263,7 @@ pub(crate) static NUM_TEMP_SENSORS: LazyLock<u8> = LazyLock::new(|| {
     num
 });
 
-fn get_temperatures_v() -> Result<TempSensorVector, nix::Error> {
+pub(crate) fn get_temperatures_v() -> Result<TempSensorVector, nix::Error> {
     let sensors_to_read = *NUM_TEMP_SENSORS;
     let mut mem = CrosEcReadmemV2 {
         offset: 0x00, // EC_MEMMAP_TEMP_SENSOR

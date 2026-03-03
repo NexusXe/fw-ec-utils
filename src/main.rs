@@ -7,7 +7,6 @@
 #![feature(const_try)]
 #![feature(portable_simd)]
 #![feature(once_cell_try)]
-
 #![allow(incomplete_features)]
 #![warn(clippy::nursery)]
 #![allow(clippy::redundant_pub_crate)]
@@ -17,7 +16,6 @@ pub(crate) mod common;
 mod daemon;
 mod fan_curve;
 mod fans;
-mod plot;
 mod temp;
 
 use clap::{CommandFactory, Parser};
@@ -177,6 +175,7 @@ struct Args {
     )]
     r#use_default: Option<String>,
 
+    #[cfg(feature = "plot")]
     /// Plot all curves
     #[arg(
         short = 'P',
@@ -193,6 +192,7 @@ struct Args {
     )]
     plot: bool,
 
+    #[cfg(feature = "plot")]
     #[allow(clippy::doc_markdown)]
     /// Path to save the plot to.
     /// Supported formats: png, jpg, webp, svg
@@ -200,10 +200,12 @@ struct Args {
     #[arg(short = 'o', long, requires("plot"), default_value = "fan_curves.png")]
     out: String,
 
+    #[cfg(feature = "plot")]
     /// (Try to) force sixel output
     #[arg(long, requires("plot"))]
     force_sixel: bool,
 
+    #[cfg(feature = "plot")]
     /// (Try to) force kitty output
     #[arg(long, requires("plot"))]
     force_kitty: bool,
@@ -278,7 +280,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .to_owned();
 
+    #[cfg(feature = "plot")]
     if args.plot {
+        mod plot;
         let path = Path::new(&args.out);
         return plot::plot_curves(path, &profiles, args.force_sixel, args.force_kitty);
     }
