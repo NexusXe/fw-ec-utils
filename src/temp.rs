@@ -1,6 +1,6 @@
-use crate::common::{
+use crate::{common::{
     CrosEcCommandV2, CrosEcReadmemV2, EcCmd, FullWriteV2Command, cros_ec, cros_ec_readmem, fire,
-};
+}, infov};
 
 use std::{
     ffi::{c_char, c_int},
@@ -215,9 +215,11 @@ static NUM_TEMP_SENSORS: OnceLock<u8> = OnceLock::new();
 
 pub(crate) fn num_temp_sensors() -> &'static u8 {
     NUM_TEMP_SENSORS.get_or_init(|| {
-        (0..=u8::MAX)
+        let num = (0..=u8::MAX)
             .take_while(|&id| probe_sensor(id).is_ok())
-            .count() as u8
+            .count() as u8;
+        infov!("Got {num:} temperature sensors.");
+        num
     })
 }
 

@@ -5,15 +5,19 @@ use std::num::NonZero;
 use std::os::fd::AsRawFd;
 use std::sync::OnceLock;
 
+use crate::infov;
+
 static CROS_EC_FILE: OnceLock<File> = OnceLock::new();
 
 pub(crate) fn cros_ec() -> &'static File {
     CROS_EC_FILE.get_or_init(|| {
-        OpenOptions::new()
+        let ec = OpenOptions::new()
             .read(true)
             .write(true)
             .open("/dev/cros_ec")
-            .expect("[ERROR]: Failed to open /dev/cros_ec. Are you running as root?")
+            .expect("[ERROR]: Failed to open /dev/cros_ec. Are you running as root?");
+        infov!("Got EC file handle.");
+        ec
     })
 }
 
