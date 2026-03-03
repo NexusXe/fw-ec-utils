@@ -7,10 +7,10 @@ use crate::{
 };
 
 use std::{
-    ffi::{c_char, c_int},
+    ffi::c_char,
     os::fd::AsRawFd,
     simd::prelude::*,
-    sync::LazyLock,
+    sync::{LazyLock, OnceLock},
 };
 
 /// The offset of temperature value stored in mapped memory.  This allows
@@ -25,7 +25,7 @@ pub(crate) const MIN_TEMP_CELSIUS: i16 = -73;
 pub(crate) const MAX_TEMP_CELSIUS: i16 = 181;
 
 /// Number of temp sensors at `EC_MEMMAP_TEMP_SENSOR`
-const EC_TEMP_SENSOR_ENTRIES: usize = 16;
+pub(crate) const EC_TEMP_SENSOR_ENTRIES: usize = 16;
 const SIMD_CAPABLE_TEMP_SENSORS: usize = {
     let mut x = EC_TEMP_SENSOR_ENTRIES.ilog2();
     if 2usize.pow(x) < EC_TEMP_SENSOR_ENTRIES {
@@ -192,27 +192,37 @@ pub(crate) union TempSensorPayload {
 
 type GetTempSensorInfoCommand = FullWriteV2Command<TempSensorPayload>;
 
+/// Cache of sensor info responses
+pub(crate) static SENSOR_CACHE: [OnceLock<EcResponseTempSensorGetInfo>; EC_TEMP_SENSOR_ENTRIES] = [const { OnceLock::new() }; EC_TEMP_SENSOR_ENTRIES];
+
 pub(crate) fn probe_sensor(
     id: u8,
 ) -> Result<EcResponseTempSensorGetInfo, Box<dyn std::error::Error>> {
-    let mut cmd = GetTempSensorInfoCommand {
-        header: CrosEcCommandV2 {
-            command: EcCmd::TempSensorGetInfo as u32,
-            outsize: std::mem::size_of::<EcParamsTempSensorGetInfo>() as u32,
-            insize: std::mem::size_of::<EcResponseTempSensorGetInfo>() as u32,
-            ..
-        },
-        payload: TempSensorPayload {
-            params: EcParamsTempSensorGetInfo { id },
-        },
-    };
-    let _bytes_returned: c_int = fire(&raw mut cmd.header)? // Option<NonZero<c_int>
-        .ok_or("Got invalid response from temperature probe.")? // NonZero<c_int>
-        .get();
+    if id >= EC_TEMP_SENSOR_ENTRIES as u8 {
+        return Err("Invalid sensor ID".into());
+    }
 
-    let response = unsafe { cmd.payload.response };
+    let info = SENSOR_CACHE[id as usize].get_or_try_init(|| {
+        let mut cmd = GetTempSensorInfoCommand {
+            header: CrosEcCommandV2 {
+                command: EcCmd::TempSensorGetInfo as u32,
+                outsize: std::mem::size_of::<EcParamsTempSensorGetInfo>() as u32,
+                insize: std::mem::size_of::<EcResponseTempSensorGetInfo>() as u32,
+                ..
+            },
+            payload: TempSensorPayload {
+                params: EcParamsTempSensorGetInfo { id },
+            },
+        };
 
-    Ok(response)
+        let _bytes_returned: std::ffi::c_int = fire(&raw mut cmd.header)?
+            .ok_or("Got invalid response from temperature probe.")?
+            .get();
+
+        Ok::<_, Box<dyn std::error::Error>>(unsafe { cmd.payload.response })
+    })?;
+
+    Ok(*info)
 }
 
 pub(crate) static NUM_TEMP_SENSORS: LazyLock<u8> = LazyLock::new(|| {
