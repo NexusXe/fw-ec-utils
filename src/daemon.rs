@@ -9,8 +9,8 @@ use std::{
 
 #[cfg(feature = "plugin")]
 use crate::{
-    infov, warn,
     fan_curve::plugins::{PluginFn, call_plugin},
+    infov, warn,
 };
 
 use crate::{temp, verbose};
@@ -149,7 +149,7 @@ pub(super) fn run_daemon(
         }
 
         #[cfg(feature = "plugin")]
-        {   
+        {
             last_poll = clock_gettime(ClockId::CLOCK_MONOTONIC_COARSE)?;
         }
         std::thread::sleep(std::time::Duration::from_millis(sleep_millis.get()));

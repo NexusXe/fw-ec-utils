@@ -16,9 +16,9 @@ pub(crate) mod common;
 mod daemon;
 mod fan_curve;
 mod fans;
-mod temp;
 #[cfg(feature = "plot")]
 mod plot;
+mod temp;
 
 use clap::{CommandFactory, Parser};
 use serde::Deserialize;

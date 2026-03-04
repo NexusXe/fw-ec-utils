@@ -51,7 +51,8 @@ get_decision(const PluginCallData *data) {
 
     This structure contains all available information regarding the system's thermal state.
 
-```c typedef struct {
+```c
+typedef struct {
   const EcResponseTempSensorGetInfo *sensors;
   const TempSensorVector *temps;
   const PluginStateMethods *state;
@@ -116,7 +117,8 @@ SET_STATE(data, "call_count", my_counter);
     The `PluginStateMethods` struct exposes the underlying operations
         as function pointers :
 
-```c typedef struct {
+```c
+typedef struct {
   bool (*set)(const char *key, const uint8_t *data, size_t len);
   PluginGetStatus (*get)(const char *key, uint8_t *buffer, size_t *buffer_len);
 } PluginStateMethods;
