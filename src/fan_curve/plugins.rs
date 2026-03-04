@@ -1,5 +1,11 @@
 use std::{
-    cell::UnsafeCell, collections::HashMap, ffi::{CStr, CString, c_char}, num::NonZeroU16, sync::{LazyLock, Mutex}, thread, time::{Duration, Instant}
+    cell::UnsafeCell,
+    collections::HashMap,
+    ffi::{CStr, CString, c_char},
+    num::NonZeroU16,
+    sync::{LazyLock, Mutex},
+    thread,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -44,8 +50,8 @@ pub enum PluginGetStatus {
 /// stupid bullshit that allows me to access this data if a thread locks it
 /// and then panics
 pub struct ForceableLock<T> {
-    lock: Mutex<()>,         // Just handles the blocking/state
-    data: UnsafeCell<T>,     // Holds the actual data, explicitly allows aliasing
+    lock: Mutex<()>,     // Just handles the blocking/state
+    data: UnsafeCell<T>, // Holds the actual data, explicitly allows aliasing
 }
 
 // YES I KNOW WHAT I AM SIGNING UP FOR JUST LET ME DO IT
@@ -74,12 +80,11 @@ static PLUGIN_STATE: LazyLock<ForceableLock<HashMap<CString, Box<[u8]>>>> =
 pub(crate) unsafe fn dump_plugin_state() {
     let mut _guard_store = None;
     let start = Instant::now();
-    
+
     let data: &HashMap<CString, Box<[u8]>> = loop {
         match PLUGIN_STATE.lock.try_lock() {
             Ok(guard) => {
                 _guard_store = Some(guard);
-                // Safe-ish: We hold the lock, so we can read the data.
                 break unsafe { &*PLUGIN_STATE.data.get() };
             }
             Err(std::sync::TryLockError::Poisoned(poisoned)) => {
@@ -91,8 +96,6 @@ pub(crate) unsafe fn dump_plugin_state() {
                     warn!(
                         "PLUGIN_STATE lock timed out after 1s; forcing dirty read via UnsafeCell."
                     );
-                    // The "Proper" UB: We don't have the lock, but we are legally 
-                    // bypassing the compiler's reference rules to perform a dirty read.
                     break unsafe { &*PLUGIN_STATE.data.get() };
                 }
                 thread::sleep(Duration::from_millis(100));
@@ -119,27 +122,24 @@ pub(crate) extern "C" fn plugin_set(key: *const c_char, data: *const u8, len: us
     let c_string = CString::from(c_str);
 
     let data_slice = if len == 0 {
-        &[] 
+        &[]
     } else {
         unsafe { std::slice::from_raw_parts(data, len) }
     };
 
     let owned_data = data_slice.to_vec().into_boxed_slice();
 
-    // 1. Acquire the permission slip (lock the Mutex<()>)
     let _guard = if let Ok(l) = PLUGIN_STATE.lock.lock() {
         l
     } else {
-        return false; // Mutex is poisoned, abort.
+        return false;
     };
 
-    // 2. Access the data
-    // SAFETY: We hold `_guard`, ensuring exclusive access to the UnsafeCell.
     let map = unsafe { &mut *PLUGIN_STATE.data.get() };
-    
+
     map.insert(c_string, owned_data);
 
-    true 
+    true
     // `_guard` drops here, unlocking the Mutex automatically.
 }
 
@@ -169,13 +169,7 @@ fn plugin_get_fallible(
     }
 
     let c_str = unsafe { CStr::from_ptr(key) };
-
-    // 1. Acquire the permission slip. 
-    // If it fails (poisoned), the `?` returns None.
     let _guard = PLUGIN_STATE.lock.lock().ok()?;
-
-    // 2. Access the data immutably.
-    // SAFETY: We hold `_guard`, ensuring no other thread is mutating the UnsafeCell.
     let map = unsafe { &*PLUGIN_STATE.data.get() };
 
     if let Some(val) = map.get(c_str) {
@@ -192,7 +186,7 @@ fn plugin_get_fallible(
             std::ptr::copy_nonoverlapping(val.as_ptr(), buffer, required_len);
         }
 
-        return Some(PluginGetStatus::Success); 
+        return Some(PluginGetStatus::Success);
     }
 
     Some(PluginGetStatus::NotFound)

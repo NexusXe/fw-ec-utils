@@ -126,6 +126,9 @@ Because the daemon runs under systemd, all standard output and error streams are
 sudo journalctl -u fw-fanctrl@$(id -u).service -f
 ```
 
+## Custom Plugins
+See [PLUGINS.md](include/PLUGINS.md) for more information.
+
 ## Motivation
 
 I've been using [fw-fanctrl](https://github.com/TamtamHero/fw-fanctrl) for a while now, and it gets the job done. However, having a Python script constantly looping in the background has always bugged me, so I decided to rewrite it in Rust. In addition, instead of spawning new processes every tick to read temps and set fan speeds, this program uses ioctls to communicate with the EC directly, which is hypothetically better.

@@ -31,7 +31,7 @@ get_decision(const PluginCallData *data) {
 
   uint16_t run_again_in = (call_count % 10 == 0) ? 50 : 500;
   if (run_again_in == 50) {
-    printf("[PLUGIN]: Requesting fast poll (50ms) for call #%llu\n", 
+    printf("[PLUGIN]: Requesting fast poll (50ms) for call #%llu\n",
            (unsigned long long)call_count);
   }
 
