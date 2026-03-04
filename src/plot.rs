@@ -376,7 +376,7 @@ fn sixel(rgb_bytes: &[u8], width: u32, height: u32) -> Result<(), Box<dyn std::e
                     } else {
                         // The character changed, so flush the previous sequence.
                         if count > 3 {
-                            write!(buffer, "!{}", count)?;
+                            write!(buffer, "!{count}")?;
                             buffer.write_all(&[current_char])?;
                         } else {
                             // If 3 or less, just write the characters sequentially
@@ -392,7 +392,7 @@ fn sixel(rgb_bytes: &[u8], width: u32, height: u32) -> Result<(), Box<dyn std::e
 
                 // Flush whatever is left in the buffer at the end of the row
                 if count > 3 {
-                    write!(buffer, "!{}", count)?;
+                    write!(buffer, "!{count}")?;
                     buffer.write_all(&[current_char])?;
                 } else {
                     let chunk = vec![current_char; count];
@@ -408,7 +408,12 @@ fn sixel(rgb_bytes: &[u8], width: u32, height: u32) -> Result<(), Box<dyn std::e
     // exit sixel mode
     writeln!(buffer, "\x1B\\")?;
 
-    infov!("Sending {:} bytes (from {:} bytes) as Sixel graphics; ratio: {:.2}%", buffer.len(), rgb_bytes.len(), (buffer.len() as f32 / rgb_bytes.len() as f32) * 100.0);
+    infov!(
+        "Sending {:} bytes (from {:} bytes) as Sixel graphics; ratio: {:.2}%",
+        buffer.len(),
+        rgb_bytes.len(),
+        (buffer.len() as f32 / rgb_bytes.len() as f32) * 100.0
+    );
     let mut stdout = io::stdout().lock();
     stdout.write_all(&buffer)?;
     stdout.flush()?;
