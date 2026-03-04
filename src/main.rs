@@ -17,6 +17,8 @@ mod daemon;
 mod fan_curve;
 mod fans;
 mod temp;
+#[cfg(feature = "plot")]
+mod plot;
 
 use clap::{CommandFactory, Parser};
 use serde::Deserialize;
@@ -326,7 +328,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "plot")]
     if args.plot {
-        use plot;
         let path = Path::new(&args.out);
         return plot::plot_curves(path, &profiles, args.force_sixel, args.force_kitty);
     }
