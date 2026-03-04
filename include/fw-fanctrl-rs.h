@@ -29,6 +29,8 @@ typedef enum {
   /* The key exists, but the provided buffer was null or too small.
   The required size has been written to the length out-parameter. */
   PLUGIN_GET_STATUS_BUFFER_TOO_SMALL = 2,
+  // Some other error occurred.
+  PLUGIN_GET_STATUS_SOME_OTHER_ERROR = 3,
 } PluginGetStatus;
 
 // State methods provided to the plugin to persist data.
