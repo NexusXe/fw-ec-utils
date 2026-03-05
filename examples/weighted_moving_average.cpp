@@ -1,7 +1,5 @@
 #include <cstdint>
 
-/* Only this included needs to be extern "C", since the get_decision function
-prototype is declared in the header. */
 extern "C" {
 #include "fw-fanctrl-rs.h"
 }
