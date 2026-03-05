@@ -1,6 +1,7 @@
 #ifndef FW_FANCTRL_H
 #define FW_FANCTRL_H
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -103,7 +104,7 @@ static inline PluginDecision make_curve_speed(uint8_t temp, uint16_t delay) {
 // Constructs a PluginDecision that will cause the host to disable the plugin.
 #define MAKE_ERROR_SPEED(value)                                                \
   ({                                                                           \
-    _Static_assert((value) > 100, "Error speed must be > 100");                \
+    static_assert((value) > 100, "Error speed must be > 100");                \
     make_set_speed(255, 1);                                                    \
   })
 
