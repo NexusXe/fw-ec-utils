@@ -125,10 +125,22 @@ pub(super) fn plot_curves(
         }
     };
 
-    let lowest_temp: CelsiusTemp =
-        ValidEcTemp(profiles.iter().map(|p| p.start).min().ok_or("No profiles provided")?).to_celsius();
-    let highest_temp: CelsiusTemp =
-        ValidEcTemp(profiles.iter().map(|p| p.end).max().ok_or("No profiles provided")?).to_celsius();
+    let lowest_temp: CelsiusTemp = ValidEcTemp(
+        profiles
+            .iter()
+            .map(|p| p.start)
+            .min()
+            .ok_or("No profiles provided")?,
+    )
+    .to_celsius();
+    let highest_temp: CelsiusTemp = ValidEcTemp(
+        profiles
+            .iter()
+            .map(|p| p.end)
+            .max()
+            .ok_or("No profiles provided")?,
+    )
+    .to_celsius();
 
     // use a macro because BitmapBackend and SVGBackend aren't dyn-compatible...
     // I don't like it either
