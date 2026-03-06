@@ -63,7 +63,7 @@ impl std::error::Error for CurveParseError {}
 ///
 /// This function will convert the °C to EC-encoded temp and return a [`ParsedCurve`],
 /// or [`CurveParseError`] if the file is malformed.
-fn squash_curvedef(file: File) -> Result<ParsedCurve, CurveParseError> {
+fn squash_curvedef(file: File) -> Result<ParsedCurve, Box<dyn std::error::Error>> {
     let reader = BufReader::new(file);
     let mut name: Option<String> = None;
     let mut points: Vec<(u8, u8)> = Vec::new();
@@ -105,7 +105,8 @@ fn squash_curvedef(file: File) -> Result<ParsedCurve, CurveParseError> {
         if ec_temp.get().is_err() {
             return Err(CurveParseError::CurveDefFormatError(format!(
                 "Nonsensical temperature {temp} on line {i}"
-            )));
+            ))
+            .into());
         }
 
         let pwm = parts
@@ -117,7 +118,9 @@ fn squash_curvedef(file: File) -> Result<ParsedCurve, CurveParseError> {
                 })
             })?;
 
-        let ec_raw = ec_temp.get().unwrap();
+        let ec_raw = ec_temp
+            .get()
+            .map_err(|e| format!("Invalid EC temp {e} on line {i} from {temp}°C"))?;
         points.push((ec_raw.0, pwm));
     }
 
@@ -130,17 +133,20 @@ fn squash_curvedef(file: File) -> Result<ParsedCurve, CurveParseError> {
     if points_slice.len() < 2 {
         return Err(CurveParseError::CurveDefFormatError(
             "At least two points (start and end) are required".to_string(),
-        ));
+        )
+        .into());
     }
     if points_slice.windows(2).any(|w| w[1].0 <= w[0].0) {
         return Err(CurveParseError::CurveDefFormatError(
             "Curve X coordinates must be strictly increasing".to_string(),
-        ));
+        )
+        .into());
     }
     if points_slice.iter().any(|p| p.1 > 100) {
         return Err(CurveParseError::CurveDefFormatError(
             "Intermediate Y must be <= 100".to_string(),
-        ));
+        )
+        .into());
     }
     Ok(ParsedCurve {
         name: name.ok_or_else(|| {
@@ -225,7 +231,10 @@ mod tests {
     #[test]
     fn test_squash_curvedef() {
         let file_path = Path::new("curves/example-curve.curvedef");
-        let curve = squash_curvedef(File::open(file_path).unwrap()).unwrap();
+        #[allow(clippy::expect_used)]
+        let curve =
+            squash_curvedef(File::open(file_path).expect("Failed to open example-curve.curvedef"))
+                .expect("Failed to parse example-curve.curvedef");
         assert_eq!(curve.name, "ExampleCurve");
         assert_eq!(curve.points.len(), 6);
         // Points are stored as (EC-encoded temp, pwm). EC = celsius + 73.

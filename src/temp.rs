@@ -318,6 +318,7 @@ mod tests {
         for case in valid_cases {
             let res: Result<ValidEcTemp, EcTempSensorError> = UnvalidatedEcTemp(case).into();
             assert!(res.is_ok());
+            #[allow(clippy::unwrap_used)] // already made sure it was Ok
             let res: KelvinTemp = res.unwrap().into();
 
             assert_eq!(res.0, u16::from(case) + EC_TEMP_SENSOR_OFFSET);

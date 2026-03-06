@@ -7,7 +7,7 @@ use crate::{
     fan_curve::{
         FanProfile,
         curve_lut_gen::generate_fan_curve_lut_dyn,
-        curve_parsing::{CurveParseError, ParsedCurve, squash_curvedef},
+        curve_parsing::{ParsedCurve, squash_curvedef},
     },
     info, infov, warn,
 };
@@ -16,7 +16,7 @@ const FAN_CACHE_DIR: &str = "/var/cache/fw-fanctrl-rs";
 
 /// Reads a .curvedef file and returns a [`ParsedCurve`].
 #[inline]
-fn load_curve_from_path(path: &PathBuf) -> Result<ParsedCurve, CurveParseError> {
+fn load_curve_from_path(path: &PathBuf) -> Result<ParsedCurve, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     squash_curvedef(file)
 }
@@ -34,8 +34,10 @@ fn save_lut_to_cache(lut: &[u8], signature: u64) -> Result<(), Box<dyn std::erro
 
 /// Compiles a [`ParsedCurve`] into a [`FanProfile`].
 /// If `CACHE` is true, the compiled curve will be cached to `/var/cache/fw-fanctrl-rs/CURVE_XXH3_64_HASH.lut`.
-fn compile_curve<const CACHE: bool>(parsed_curve: ParsedCurve) -> FanProfile {
-    let lut = generate_fan_curve_lut_dyn(&parsed_curve.points);
+fn compile_curve<const CACHE: bool>(
+    parsed_curve: ParsedCurve,
+) -> Result<FanProfile, Box<dyn std::error::Error>> {
+    let lut = generate_fan_curve_lut_dyn(&parsed_curve.points)?;
 
     if CACHE {
         if let Err(e) = save_lut_to_cache(&lut, parsed_curve.signature) {
@@ -48,18 +50,18 @@ fn compile_curve<const CACHE: bool>(parsed_curve: ParsedCurve) -> FanProfile {
         }
     }
 
-    FanProfile {
+    Ok(FanProfile {
         name: parsed_curve.name.into(),
         start: parsed_curve.points[0].0,
         end: parsed_curve.points[parsed_curve.points.len() - 1].0,
         lut: lut.into(),
         signature: parsed_curve.signature,
-    }
+    })
 }
 
 /// Loads a curve from a .curvedef file and returns a [`FanProfile`].
 /// If `CACHE` is true, the compiled curve will be cached to `/var/cache/fw-fanctrl-rs/CURVE_XXH3_64_HASH.lut` if it doesn't already exist.
-pub(super) fn get_external_curve(path: &PathBuf) -> Result<FanProfile, CurveParseError> {
+pub(super) fn get_external_curve(path: &PathBuf) -> Result<FanProfile, Box<dyn std::error::Error>> {
     // first, parse the curve
     let parsed_curve = load_curve_from_path(path)?;
     infov!(
@@ -90,5 +92,6 @@ pub(super) fn get_external_curve(path: &PathBuf) -> Result<FanProfile, CurvePars
         "No cached curve found for {}. Compiling...",
         parsed_curve.name
     );
-    Ok(compile_curve::<true>(parsed_curve))
+
+    compile_curve::<true>(parsed_curve)
 }

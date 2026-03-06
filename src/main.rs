@@ -11,6 +11,7 @@
 #![warn(clippy::nursery)]
 #![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::cast_possible_truncation)]
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 #[cfg(target_family = "windows")]
 compile_error!(
@@ -221,18 +222,22 @@ struct Args {
 }
 
 #[allow(clippy::too_many_lines)] // too bad!
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    if args.quiet {
-        QUIET.set(true).unwrap();
-    } else if args.verbose {
-        // mutually exclusive with quiet
-        VERBOSE.set(true).unwrap();
+
+    // QUIET and VERBOSE are always unset at this point
+    unsafe {
+        if args.quiet {
+            QUIET.set(true).unwrap_unchecked();
+        } else if args.verbose {
+            // mutually exclusive with quiet
+            VERBOSE.set(true).unwrap_unchecked();
+        }
     }
 
     #[cfg(not(feature = "plugin"))]
     if args.plugin.is_some() {
-        return Err("[ERROR]: fw-fanctrl-rs was not built with plugin support.".into());
+        return Err("fw-fanctrl-rs was not built with plugin support.".into());
     }
 
     let mut profiles = fan_curve::curve_parsing::get_all_external_curves();
@@ -254,22 +259,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match load_config(&args.config) {
         Ok(config) => {
             infov!("Loaded config from {}", args.config);
+            infov!("\tWith default profile: {}", config.default_curve);
             config_default = Some(config.default_curve);
-            infov!(
-                "    With default profile: {}",
-                config_default.as_ref().unwrap()
-            );
-            config_sleep_millis = Some(
-                NonZeroU64::new(config.poll_interval_ms)
-                    .expect("[ERROR]: Config cannot have 0ms poll interval"),
-            );
-            infov!("    With poll interval: {}ms", config_sleep_millis.unwrap());
+            let sleep_millis = NonZeroU64::new(config.poll_interval_ms).unwrap_or_else(|| {
+                warn!("Config has 0ms poll interval, using default 1000ms");
+                NonZeroU64::new(1000).unwrap_or_else(|| unreachable!("1000 != 0"))
+            });
+            infov!("\tWith poll interval: {}ms", sleep_millis);
+            config_sleep_millis = Some(sleep_millis);
             #[cfg(feature = "plugin")]
             if let Some(plugin_path) = config.plugin_path {
+                infov!("\tWith plugin: {}", plugin_path);
                 config_plugin = Some(plugin_path);
-                infov!("    With plugin: {}", config_plugin.as_ref().unwrap());
             } else {
-                infov!("    No plugin specified in config");
+                infov!("\tNo plugin specified in config");
             }
         }
         Err(e) => {
@@ -280,7 +283,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sleep_millis: NonZeroU64 = args
         .sleep_millis
         .or(config_sleep_millis)
-        .unwrap_or_else(|| NonZeroU64::new(1000).unwrap()); // unwrap is fine here since 1000 != 0
+        .unwrap_or_else(|| NonZeroU64::new(1000).unwrap_or_else(|| unreachable!("1000 != 0")));
 
     let plugin_path = args.plugin.or(config_plugin).map(PathBuf::from);
     let plugin: Option<&PathBuf> = plugin_path.as_ref();
@@ -320,7 +323,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let profile = fan_curve::get_profile_by_name(&profile_name, &profiles)
         .unwrap_or_else(|| {
             warn!("Profile '{}' not found, using default.", profile_name);
-            fan_curve::get_profile_by_name("default", &profiles).expect("Default profile not found")
+            fan_curve::get_profile_by_name("default", &profiles)
+                .unwrap_or_else(|| unreachable!("Default profile not found"))
         })
         .to_owned();
 
@@ -342,10 +346,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(val) = args.fan {
         set_fan(&val)?;
     } else if args.daemon {
-        daemon::run_daemon(&profile, sleep_millis, plugin).map_err(|e| {
-            eprintln!("[ERROR]: {e}");
-            e
-        })?;
+        daemon::run_daemon(&profile, sleep_millis, plugin)?;
     } else if args.curve {
         print_curve_csv(&profile);
     } else if args.total_lut_size {
@@ -369,6 +370,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn main() -> std::process::ExitCode {
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("[ERROR]: {e}");
+            std::process::ExitCode::from(1)
+        }
+    }
+}
+
 fn set_fan(val: &str) -> Result<(), Box<dyn std::error::Error>> {
     if val == "auto" {
         fans::set_auto()?;
@@ -383,7 +394,12 @@ fn set_fan(val: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 fn print_temps() -> Result<(), Box<dyn std::error::Error>> {
     let temps = temp::get_temperatures()?;
-    let max_temp_idx = temps.iter().enumerate().max_by_key(|&(_, &t)| t).unwrap().0;
+    let max_temp_idx = temps
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_, &t)| t)
+        .ok_or("No temperatures found")?
+        .0;
     println!("--- Thermal Readings ---");
     for (i, t) in temps.iter().enumerate() {
         match t.get() {

@@ -9,7 +9,10 @@ macro_rules! parity_test {
     ($test_name:ident, $profile:expr, $points:expr) => {
         #[test]
         fn $test_name() {
-            let runtime = generate_fan_curve_lut_dyn(&$points);
+            let runtime = generate_fan_curve_lut_dyn(&$points).expect(&format!(
+                "Failed to generate rumtime LUT for profile '{}'",
+                $profile.name
+            ));
             assert_eq!(
                 $profile.lut.as_ref(),
                 runtime.as_slice(),
@@ -55,6 +58,13 @@ parity_test!(
     [(25, 35), (30, 40), (45, 50), (60, 75), (65, 100)]
 );
 
+/// Helper to generate a LUT at runtime or panic if it fails
+#[allow(clippy::expect_used)]
+#[inline]
+fn runtime_lut_or_panic(points: &[(u8, u8)]) -> Vec<u8> {
+    generate_fan_curve_lut_dyn(points).expect("Failed to generate rumtime LUT for test")
+}
+
 #[test]
 fn output_values_in_range() {
     for profile in BUILTIN_PROFILES {
@@ -67,7 +77,7 @@ fn output_values_in_range() {
         }
     }
     // Also check the runtime path independently on a fresh curve
-    let lut = generate_fan_curve_lut_dyn(&[(10, 0), (50, 100)]);
+    let lut = runtime_lut_or_panic(&[(10, 0), (50, 100)]);
     assert!(lut.iter().all(|&v| v <= 100));
 }
 
@@ -76,7 +86,7 @@ fn knot_values_are_exact() {
     // Raw points; the EC offset shifts X but not the LUT index origin.
     // LUT index 0 = first knot, index 20 = second knot, index 40 = third.
     let points: &[(u8, u8)] = &[(10, 0), (30, 50), (50, 100)];
-    let lut = generate_fan_curve_lut_dyn(points);
+    let lut = runtime_lut_or_panic(points);
 
     assert_eq!(lut[0], 0, "First knot Y should be 0");
     assert_eq!(lut[20], 50, "Middle knot Y should be 50");
@@ -89,7 +99,7 @@ fn two_point_linear_matches_const() {
     const LUT_SIZE: usize = 101;
 
     let const_lut = const_lut_as_vec::<2, LUT_SIZE>(&POINTS);
-    let runtime_lut = generate_fan_curve_lut_dyn(&POINTS);
+    let runtime_lut = runtime_lut_or_panic(&POINTS);
 
     assert_eq!(const_lut, runtime_lut, "Two-point linear parity failed");
 
@@ -105,7 +115,7 @@ fn two_point_linear_matches_const() {
 #[test]
 fn flat_plateau_stays_flat() {
     let points: &[(u8, u8)] = &[(0, 20), (20, 50), (40, 50), (60, 100)];
-    let lut = generate_fan_curve_lut_dyn(points);
+    let lut = runtime_lut_or_panic(points);
 
     // Indices 20..=40 correspond to raw-X 20..=40, which is the flat region
     for (idx, &v) in lut[20..=40].iter().enumerate() {
@@ -133,7 +143,7 @@ fn non_uniform_spacing_matches_const() {
     const LUT_SIZE: usize = 91;
 
     let const_lut = const_lut_as_vec::<3, LUT_SIZE>(&POINTS);
-    let runtime_lut = generate_fan_curve_lut_dyn(&POINTS);
+    let runtime_lut = runtime_lut_or_panic(&POINTS);
 
     assert_eq!(const_lut, runtime_lut, "Non-uniform spacing parity failed");
 }

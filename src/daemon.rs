@@ -42,7 +42,7 @@ fn init_plugin_fn(plugin: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let func = unsafe {
         lib.get(b"get_decision")
             .map(|f| *f)
-            .expect("Could not find C function get_decision in plugin")
+            .map_err(|e| format!("Could not find C function get_decision in plugin: {e}"))?
     };
     PLUGIN_FN
         .set(func)
@@ -64,7 +64,7 @@ pub(super) fn run_daemon(
     ctrlc::set_handler(move || {
         r.store(false, Ordering::SeqCst);
     })
-    .expect("Error setting Ctrl-C handler");
+    .map_err(|e| format!("Error setting Ctrl-C handler: {e}"))?;
 
     info!(
         "Starting daemon with profile \"{}\". Using {:}ms sleep.",
@@ -207,7 +207,7 @@ pub(super) fn restart_daemon<const NEW_DEFAULT: bool>(
                 }
             }
             Err(e) => {
-                eprintln!("[ERROR]: Failed to set \"{new_curve}\" as the new default curve.");
+                eprintln!("Failed to set \"{new_curve}\" as the new default curve.");
                 match e.kind() {
                     std::io::ErrorKind::PermissionDenied => {
                         return Err("Permission denied. Are you running as root?".into());
@@ -221,7 +221,7 @@ pub(super) fn restart_daemon<const NEW_DEFAULT: bool>(
         match std::fs::write(Path::new(USE_ONCE_PATH), new_curve) {
             Ok(()) => info!("Set \"{new_curve}\" as the curve to use once."),
             Err(e) => {
-                eprintln!("[ERROR]: Failed to set \"{new_curve}\" as the curve to use once.");
+                eprintln!("Failed to set \"{new_curve}\" as the curve to use once.");
                 match e.kind() {
                     std::io::ErrorKind::PermissionDenied => {
                         return Err("Permission denied. Are you running as root?".into());

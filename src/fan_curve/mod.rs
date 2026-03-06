@@ -45,10 +45,10 @@ impl std::fmt::Display for FanProfile {
         writeln!(f, "Fan Curve: {}", self.name)?;
         let start_celsius: CelsiusTemp = UnvalidatedEcTemp(self.start)
             .to_celsius()
-            .expect("Invalid start temperature");
+            .map_err(|_| std::fmt::Error)?;
         let end_celsius: CelsiusTemp = UnvalidatedEcTemp(self.end)
             .to_celsius()
-            .expect("Invalid end temperature");
+            .map_err(|_| std::fmt::Error)?;
 
         writeln!(
             f,

@@ -164,7 +164,9 @@ where
 /// # Panics
 /// Panics under the same conditions as the `const fn` version (fewer than 2 points,
 /// non-monotone X coordinates, Y values > 100).
-pub(super) fn generate_fan_curve_lut_dyn(points: &[(u8, u8)]) -> Vec<u8> {
+pub(super) fn generate_fan_curve_lut_dyn(
+    points: &[(u8, u8)],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     debug_assert!(
         points.len() >= 2,
         "At least two points (start and end) are required"
@@ -176,9 +178,12 @@ pub(super) fn generate_fan_curve_lut_dyn(points: &[(u8, u8)]) -> Vec<u8> {
         .map(|&(x, y)| (x.saturating_add(EC_TEMP_SENSOR_OFFSET_CELSIUS as u8), y))
         .collect();
 
+    let first = shifted.first().ok_or("Points array is empty")?;
+    let last = shifted.last().ok_or("Points array is empty")?;
+
     // Validate
-    debug_assert!(shifted.first().unwrap().1 <= 100, "Start Y must be <= 100");
-    debug_assert!(shifted.last().unwrap().1 <= 100, "End Y must be <= 100");
+    debug_assert!(first.1 <= 100, "Start Y must be <= 100");
+    debug_assert!(last.1 <= 100, "End Y must be <= 100");
     debug_assert!(
         shifted.windows(2).all(|w| w[1].0 > w[0].0),
         "Curve X coordinates must be strictly increasing"
@@ -224,8 +229,8 @@ pub(super) fn generate_fan_curve_lut_dyn(points: &[(u8, u8)]) -> Vec<u8> {
     }
 
     // Build the LUT by evaluating the spline at every integer X in the range
-    let x_start = shifted.first().unwrap().0;
-    let x_end = shifted.last().unwrap().0;
+    let x_start = first.0;
+    let x_end = last.0;
 
     let mut output: Vec<u8> = (x_start..=x_end)
         .map(|x| {
@@ -262,5 +267,5 @@ pub(super) fn generate_fan_curve_lut_dyn(points: &[(u8, u8)]) -> Vec<u8> {
         .collect();
     // lut will never be modified again after this point
     output.shrink_to_fit();
-    output
+    Ok(output)
 }

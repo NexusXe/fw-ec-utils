@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 
 use crate::infov;
 
+#[allow(clippy::expect_used)]
 pub(crate) static CROS_EC_FILE: LazyLock<File> = LazyLock::new(|| {
     let ec = OpenOptions::new()
         .read(true)
