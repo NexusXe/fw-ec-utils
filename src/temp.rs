@@ -48,8 +48,8 @@ impl ValidEcTemp {
     }
 
     #[allow(dead_code)]
-    pub(crate) const fn from_celsius(celsius: CelsiusTemp) -> Self {
-        celsius.into()
+    pub(crate) const fn from_celsius(celsius: CelsiusTemp) -> Result<Self, &'static str> {
+        celsius.try_into()
     }
 }
 
@@ -59,14 +59,21 @@ impl const std::default::Default for ValidEcTemp {
     }
 }
 
-impl const From<CelsiusTemp> for ValidEcTemp {
+// Removed `From` and replaced with `TryFrom`
+impl const TryFrom<CelsiusTemp> for ValidEcTemp {
+    type Error = &'static str; // Or a custom domain error
+
     #[inline]
-    fn from(celsius: CelsiusTemp) -> Self {
+    fn try_from(celsius: CelsiusTemp) -> Result<Self, Self::Error> {
         let raw = celsius.0 + EC_TEMP_SENSOR_OFFSET_CELSIUS.cast_signed();
-        // verify that the conversion is valid
-        debug_assert!(raw >= 0 && raw <= 255);
-        #[allow(clippy::cast_sign_loss)]
-        Self(raw as u8)
+        
+        // 0xFB (251) is the maximum valid temperature before hitting error codes
+        if (0..=251).contains(&raw) {
+            #[allow(clippy::cast_sign_loss)]
+            Ok(Self(raw as u8))
+        } else {
+            Err("Celsius temperature out of valid sensor range (exceeds 178C or drops below -73C)")
+        }
     }
 }
 

@@ -7,6 +7,8 @@
 #![feature(portable_simd)]
 #![feature(once_cell_try)]
 #![feature(optimize_attribute)]
+#![feature(const_range)]
+
 #![allow(incomplete_features)]
 #![warn(clippy::nursery)]
 #![allow(clippy::redundant_pub_crate)]
