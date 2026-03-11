@@ -6,7 +6,7 @@ license = "AGPL-3.0-or-later"
 
 [features]
 plot = ["dep:plotters", "dep:image", "dep:flate2", "nix/term"]
-plugin = ["nix/time", "dep:libloading"]
+plugin = ["nix/time", "dep:libloading", "dep:rustc-hash"]
 default = ["plugin", "plot"]
 
 [dependencies]
@@ -37,6 +37,7 @@ xxhash-rust = { version = "0.8.15", default-features = false, features = [
     "xxh3",
 ] }
 libloading = { version = "0.9", optional = true }
+rustc-hash = { version = "2.1.1", features = ["nightly"], optional = true }
 
 [profile.release]
 opt-level = 3

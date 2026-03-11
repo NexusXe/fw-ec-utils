@@ -1,6 +1,5 @@
 use std::{
     cell::UnsafeCell,
-    collections::HashMap,
     ffi::{CStr, CString, c_char},
     num::NonZeroU16,
     sync::{LazyLock, Mutex},
@@ -12,6 +11,8 @@ use nix::{
     sys::time::TimeSpec,
     time::{ClockId, clock_gettime},
 };
+
+use rustc_hash::FxHashMap;
 
 use crate::{
     infov,
@@ -72,8 +73,8 @@ impl<T> ForceableLock<T> {
 }
 
 /// Plugin state. Static because I want it to be lol
-static PLUGIN_STATE: LazyLock<ForceableLock<HashMap<CString, Box<[u8]>>>> =
-    LazyLock::new(|| ForceableLock::new(HashMap::new()));
+static PLUGIN_STATE: LazyLock<ForceableLock<FxHashMap<CString, Box<[u8]>>>> =
+    LazyLock::new(|| ForceableLock::new(FxHashMap::default()));
 
 /// Dumps the plugin state to the console.
 ///
@@ -86,7 +87,7 @@ pub(crate) unsafe fn dump_plugin_state() {
     let mut _guard_store = None;
     let start = Instant::now();
 
-    let data: &HashMap<CString, Box<[u8]>> = loop {
+    let data: &FxHashMap<CString, Box<[u8]>> = loop {
         match PLUGIN_STATE.lock.try_lock() {
             Ok(guard) => {
                 _guard_store = Some(guard);
