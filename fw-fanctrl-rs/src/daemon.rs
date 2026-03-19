@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 static PLUGIN_LIB: OnceLock<libloading::Library> = OnceLock::new();
 
 #[cfg(feature = "plugin")]
-fn init_plugin(plugin: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn init_plugin(plugin: &Path) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("Loading plugin from {plugin:?}");
     let lib = unsafe { libloading::Library::new(plugin) }?;
     PLUGIN_LIB
@@ -36,7 +36,7 @@ fn init_plugin(plugin: &Path) -> Result<(), Box<dyn std::error::Error>> {
 static PLUGIN_FN: OnceLock<PluginFn> = OnceLock::new();
 
 #[cfg(feature = "plugin")]
-fn init_plugin_fn(plugin: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn init_plugin_fn(plugin: &Path) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_plugin(plugin)?;
     let lib = PLUGIN_LIB.get().ok_or("Plugin not initialized")?;
     let func = unsafe {
@@ -53,7 +53,7 @@ pub(super) fn run_daemon(
     profile: &fan_curve::FanProfile,
     sleep_millis: NonZeroU64,
     _plugin: Option<&PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 

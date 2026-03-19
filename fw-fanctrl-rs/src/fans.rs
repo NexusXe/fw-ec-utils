@@ -7,7 +7,7 @@ struct EcParamsPwmSetFanDuty {
 
 type SetFanDutyCommand = FullWriteV2Command<EcParamsPwmSetFanDuty>;
 
-pub(crate) fn set_duty(percent: u8) -> Result<(), nix::Error> {
+pub(crate) fn set_duty(percent: u8) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut cmd = SetFanDutyCommand {
         header: CrosEcCommandV2 {
             command: EcCmd::PwmSetFanDuty as u32,
@@ -23,7 +23,7 @@ pub(crate) fn set_duty(percent: u8) -> Result<(), nix::Error> {
     Ok(())
 }
 
-pub(crate) fn set_auto() -> Result<(), nix::Error> {
+pub(crate) fn set_auto() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut cmd = CrosEcCommandV2 {
         command: EcCmd::ThermalAutoFanCtrl as u32,
         outsize: 0,

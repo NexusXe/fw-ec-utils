@@ -343,11 +343,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     drop(profiles);
 
     if args.temp {
-        print_temps()?;
+        print_temps().as_ref().map_err(|e| e.to_string())?;
     } else if let Some(val) = args.fan {
-        set_fan(&val)?;
+        set_fan(&val).as_ref().map_err(|e| e.to_string())?;
     } else if args.daemon {
-        daemon::run_daemon(&profile, sleep_millis, plugin)?;
+        daemon::run_daemon(&profile, sleep_millis, plugin).as_ref().map_err(|e| e.to_string())?;
     } else if args.curve {
         print_curve_csv(&profile);
     } else if args.total_lut_size {
@@ -381,7 +381,7 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-fn set_fan(val: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn set_fan(val: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if val == "auto" {
         fans::set_auto()?;
         info!("Set auto fan control.");
@@ -393,7 +393,7 @@ fn set_fan(val: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn print_temps() -> Result<(), Box<dyn std::error::Error>> {
+fn print_temps() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let temps = temp::get_temperatures()?;
     let max_temp_idx = temps
         .iter()

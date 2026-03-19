@@ -5,15 +5,15 @@ use std::num::NonZero;
 use std::os::fd::AsRawFd;
 use std::sync::LazyLock;
 
-#[allow(clippy::expect_used)]
-pub static CROS_EC_FILE: LazyLock<File> = LazyLock::new(|| {
+pub static CROS_EC_FILE: LazyLock<Result<File, Box<dyn std::error::Error + Send + Sync>>> = LazyLock::new(|| {
     let ec = OpenOptions::new()
         .read(true)
         .write(true)
-        .open("/dev/cros_ec")
-        .expect("[ERROR]: Failed to open /dev/cros_ec. Are you running as root?");
-    println!("[INFO]: Got EC file handle.");
-    ec
+        .open("/dev/cros_ec");
+    if ec.is_ok() {
+        println!("[INFO]: Got EC file handle.");
+    }
+    Ok(ec?)
 });
 
 #[allow(dead_code)]
@@ -436,10 +436,11 @@ ioctl_readwrite!(
 /// # Safety
 ///
 /// The caller must ensure that `payload` is a valid pointer to a `CrosEcCommandV2` struct.
-pub unsafe fn fire(payload: *mut CrosEcCommandV2) -> Result<Option<NonZero<c_int>>, nix::Error> {
-    let result = unsafe { cros_ec_cmd(CROS_EC_FILE.as_raw_fd(), payload) }?;
+pub unsafe fn fire(payload: *mut CrosEcCommandV2) -> Result<Option<NonZero<c_int>>, Box<dyn std::error::Error + Send + Sync>> {
+    let fd = CROS_EC_FILE.as_ref().map_err(|e| e.to_string())?.as_raw_fd();
+    let result = unsafe { cros_ec_cmd(fd, payload) }?;
     if result < 0 {
-        Err(nix::Error::from_raw(result))
+        Err(Box::new(nix::Error::from_raw(result)))
     } else {
         Ok(NonZero::<c_int>::new(result))
     }

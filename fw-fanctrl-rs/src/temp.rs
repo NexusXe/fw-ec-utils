@@ -258,7 +258,7 @@ pub(crate) fn probe_sensor(
             },
         };
 
-        let _bytes_returned: std::ffi::c_int = unsafe { fire(&raw mut cmd.header) }?
+        let _bytes_returned: std::ffi::c_int = unsafe { fire(&raw mut cmd.header) }.as_ref().map_err(|e| e.to_string())?
             .ok_or("Got invalid response from temperature probe.")?
             .get();
 
@@ -276,7 +276,7 @@ pub(crate) static NUM_TEMP_SENSORS: LazyLock<u8> = LazyLock::new(|| {
     num
 });
 
-pub(crate) fn get_temperatures_v() -> Result<TempSensorVector, nix::Error> {
+pub(crate) fn get_temperatures_v() -> Result<TempSensorVector, Box<dyn std::error::Error + Send + Sync>> {
     let sensors_to_read = *NUM_TEMP_SENSORS;
     let mut mem = CrosEcReadmemV2 {
         offset: 0x00, // EC_MEMMAP_TEMP_SENSOR
@@ -286,9 +286,9 @@ pub(crate) fn get_temperatures_v() -> Result<TempSensorVector, nix::Error> {
 
     unsafe {
         // Fire the v2 readmem ioctl
-        let result = cros_ec_readmem(CROS_EC_FILE.as_raw_fd(), &raw mut mem)?;
+        let result = cros_ec_readmem(CROS_EC_FILE.as_ref().map_err(|e| e.to_string())?.as_raw_fd(), &raw mut mem)?;
         if result < 0 {
-            return Err(nix::Error::from_raw(result));
+            return Err(Box::new(nix::Error::from_raw(result)));
         }
     }
 
@@ -297,7 +297,7 @@ pub(crate) fn get_temperatures_v() -> Result<TempSensorVector, nix::Error> {
     ))
 }
 
-pub(crate) fn get_temperatures() -> Result<Vec<UnvalidatedEcTemp>, nix::Error> {
+pub(crate) fn get_temperatures() -> Result<Vec<UnvalidatedEcTemp>, Box<dyn std::error::Error + Send + Sync>> {
     let temps = get_temperatures_v()?;
     let temps = &temps.as_array()[0..*NUM_TEMP_SENSORS as _];
     Ok(temps.iter().map(|&t| UnvalidatedEcTemp(t)).collect())
@@ -308,7 +308,7 @@ fn max_temp(input: TempSensorVector) -> ValidEcTemp {
     ValidEcTemp(input.reduce_max())
 }
 
-pub(crate) fn get_max_temp() -> Result<ValidEcTemp, nix::Error> {
+pub(crate) fn get_max_temp() -> Result<ValidEcTemp, Box<dyn std::error::Error + Send + Sync>> {
     let temps = get_temperatures_v()?;
     Ok(max_temp(temps))
 }

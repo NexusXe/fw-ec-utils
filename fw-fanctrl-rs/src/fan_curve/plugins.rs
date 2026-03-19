@@ -254,7 +254,7 @@ pub(crate) fn call_plugin(
     highest_temp: ValidEcTemp,
     lut_speed: u8,
     last_poll: TimeSpec,
-) -> Result<ValidatedDecision, Box<dyn std::error::Error>> {
+) -> Result<ValidatedDecision, Box<dyn std::error::Error + Send + Sync>> {
     let readings = get_temperatures_v()?;
 
     let readings_ptr = &raw const readings;
