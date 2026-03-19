@@ -5,21 +5,19 @@ use std::num::NonZero;
 use std::os::fd::AsRawFd;
 use std::sync::LazyLock;
 
-use crate::infov;
-
 #[allow(clippy::expect_used)]
-pub(crate) static CROS_EC_FILE: LazyLock<File> = LazyLock::new(|| {
+pub static CROS_EC_FILE: LazyLock<File> = LazyLock::new(|| {
     let ec = OpenOptions::new()
         .read(true)
         .write(true)
         .open("/dev/cros_ec")
         .expect("[ERROR]: Failed to open /dev/cros_ec. Are you running as root?");
-    infov!("Got EC file handle.");
+    println!("[INFO]: Got EC file handle.");
     ec
 });
 
 #[allow(dead_code)]
-pub(crate) enum EcCmd {
+pub enum EcCmd {
     ProtoVersion = 0x0000,
     Hello = 0x0001,
     GetVersion = 0x0002,
@@ -215,28 +213,28 @@ pub(crate) enum EcCmd {
 }
 
 #[repr(C)]
-pub(crate) struct CrosEcCommandV2 {
-    pub(crate) version: u32 = 0,
-    pub(crate) command: u32,
-    pub(crate) outsize: u32,
-    pub(crate) insize: u32,
-    pub(crate) result: u32 = 0,
-    pub(crate) data: [u8; 0] = [],
+pub struct CrosEcCommandV2 {
+    pub version: u32 = 0,
+    pub command: u32,
+    pub outsize: u32,
+    pub insize: u32,
+    pub result: u32 = 0,
+    pub data: [u8; 0] = [],
 }
 
 #[repr(C)]
-pub(crate) struct FullWriteV2Command<T> {
-    pub(crate) header: CrosEcCommandV2,
-    pub(crate) payload: T,
+pub struct FullWriteV2Command<T> {
+    pub header: CrosEcCommandV2,
+    pub payload: T,
 }
 
 const EC_MEMMAP_SIZE: usize = 255;
 
 #[repr(C)]
-pub(crate) struct CrosEcReadmemV2 {
-    pub(crate) offset: u32,
-    pub(crate) bytes: u32,
-    pub(crate) buffer: [u8; EC_MEMMAP_SIZE],
+pub struct CrosEcReadmemV2 {
+    pub offset: u32,
+    pub bytes: u32,
+    pub buffer: [u8; EC_MEMMAP_SIZE],
 }
 
 const CROS_EC_MAGIC: u8 = 0xEC;
@@ -257,13 +255,14 @@ ioctl_readwrite!(
     CrosEcReadmemV2
 );
 
-pub(crate) fn fire(payload: *mut CrosEcCommandV2) -> Result<Option<NonZero<c_int>>, nix::Error> {
-    unsafe {
-        let result = cros_ec_cmd(CROS_EC_FILE.as_raw_fd(), payload)?;
-        if result < 0 {
-            Err(nix::Error::from_raw(result))
-        } else {
-            Ok(NonZero::<c_int>::new(result))
-        }
+/// # Safety
+///
+/// The caller must ensure that `payload` is a valid pointer to a `CrosEcCommandV2` struct.
+pub unsafe fn fire(payload: *mut CrosEcCommandV2) -> Result<Option<NonZero<c_int>>, nix::Error> {
+    let result = unsafe { cros_ec_cmd(CROS_EC_FILE.as_raw_fd(), payload) }?;
+    if result < 0 {
+        Err(nix::Error::from_raw(result))
+    } else {
+        Ok(NonZero::<c_int>::new(result))
     }
 }

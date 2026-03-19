@@ -66,7 +66,7 @@ impl const TryFrom<CelsiusTemp> for ValidEcTemp {
     #[inline]
     fn try_from(celsius: CelsiusTemp) -> Result<Self, Self::Error> {
         let raw = celsius.0 + EC_TEMP_SENSOR_OFFSET_CELSIUS.cast_signed();
-        
+
         // 0xFB (251) is the maximum valid temperature before hitting error codes
         if (0..=251).contains(&raw) {
             #[allow(clippy::cast_sign_loss)]
@@ -258,7 +258,7 @@ pub(crate) fn probe_sensor(
             },
         };
 
-        let _bytes_returned: std::ffi::c_int = fire(&raw mut cmd.header)?
+        let _bytes_returned: std::ffi::c_int = unsafe { fire(&raw mut cmd.header) }?
             .ok_or("Got invalid response from temperature probe.")?
             .get();
 

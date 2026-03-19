@@ -1,43 +1,10 @@
-[package]
-name = "fw-fanctrl-rs"
-version = "0.3.0"
-edition = "2024"
-license = "AGPL-3.0-or-later"
-
-[features]
-plot = ["dep:plotters", "dep:image", "dep:flate2", "nix/term"]
-plugin = ["nix/time", "dep:libloading", "dep:rustc-hash"]
-default = ["plugin", "plot"]
-
-[dependencies]
-base64 = { version = "0.22.1", default-features = false, features = ["std"] }
-clap = { version = "4.5.60", features = ["derive"] }
-clap_complete = "4.5.66"
-ctrlc = "3.5.2"
-image = { version = "0.25.9", default-features = false, features = [
-    "png",
-    "jpeg",
-    "webp",
-], optional = true }
-flate2 = { version = "1.1", default-features = false, features = ["zlib"], optional = true }
-nix = { version = "0.31", default-features = false, features = ["ioctl"] }
-plotters = { version = "0.3", default-features = false, features = [
-    "bitmap_backend",
-    "svg_backend",
-    "ttf",
-    "line_series",
-], optional = true }
-serde = { version = "1.0.228", default-features = false, features = ["derive"] }
-toml = { version = "1.0.6", default-features = false, features = [
-    "parse",
-    "serde",
-] }
-xxhash-rust = { version = "0.8.15", default-features = false, features = [
-    "const_xxh3",
-    "xxh3",
-] }
-libloading = { version = "0.9", optional = true }
-rustc-hash = { version = "2.1.1", features = ["nightly"], optional = true }
+[workspace]
+resolver = "3"
+members = [
+    "ec-core",
+    "fw-fanctrl-rs",
+    "fw-chargemon"
+]
 
 [profile.release]
 opt-level = 3

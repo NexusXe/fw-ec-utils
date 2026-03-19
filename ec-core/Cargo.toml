@@ -1,0 +1,8 @@
+[package]
+name = "ec-core"
+version = "0.3.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+nix = { version = "0.31", default-features = false, features = ["ioctl"] }

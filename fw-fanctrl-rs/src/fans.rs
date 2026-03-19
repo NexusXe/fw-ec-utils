@@ -19,7 +19,7 @@ pub(crate) fn set_duty(percent: u8) -> Result<(), nix::Error> {
             percent: u32::from(percent),
         },
     };
-    let _ = fire(&raw mut cmd.header)?;
+    let _ = unsafe { fire(&raw mut cmd.header) }?;
     Ok(())
 }
 
@@ -30,6 +30,6 @@ pub(crate) fn set_auto() -> Result<(), nix::Error> {
         insize: 0,
         ..
     };
-    let _ = fire(&raw mut cmd)?;
+    let _ = unsafe { fire(&raw mut cmd) }?;
     Ok(())
 }

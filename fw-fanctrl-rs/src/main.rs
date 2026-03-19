@@ -8,7 +8,6 @@
 #![feature(once_cell_try)]
 #![feature(optimize_attribute)]
 #![feature(const_range)]
-
 #![allow(incomplete_features)]
 #![warn(clippy::nursery)]
 #![allow(clippy::redundant_pub_crate)]
@@ -20,7 +19,7 @@ compile_error!(
     "fw-fanctrl-rs does not support Windows. Consider http://ozturkkl.github.io/framework-control/ for a Windows-compatible alternative.\nNote that I have never used it, so I cannot vouch for its quality."
 );
 
-pub(crate) mod common;
+pub use ec_core::common;
 mod daemon;
 mod fan_curve;
 mod fans;
