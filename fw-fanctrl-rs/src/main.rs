@@ -347,7 +347,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(val) = args.fan {
         set_fan(&val).as_ref().map_err(|e| e.to_string())?;
     } else if args.daemon {
-        daemon::run_daemon(&profile, sleep_millis, plugin).as_ref().map_err(|e| e.to_string())?;
+        daemon::run_daemon(&profile, sleep_millis, plugin)
+            .as_ref()
+            .map_err(|e| e.to_string())?;
     } else if args.curve {
         print_curve_csv(&profile);
     } else if args.total_lut_size {
