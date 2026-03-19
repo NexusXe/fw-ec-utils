@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "ec-core"
-version = "0.3.0"
+version = "0.1.0"
 dependencies = [
  "nix",
 ]
@@ -422,7 +422,11 @@ dependencies = [
 
 [[package]]
 name = "fw-chargemon"
-version = "0.3.0"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "ec-core",
+]
 
 [[package]]
 name = "fw-fanctrl-rs"
