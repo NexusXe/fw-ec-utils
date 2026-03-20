@@ -10,3 +10,4 @@ rust-toolchain.toml
 *.so
 *.out
 examples/internal*
+ec_commands.h
