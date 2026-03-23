@@ -6,7 +6,7 @@ pub(crate) enum Batt {
     Rate = 0x44,
     /// Battery Remaining Capacity
     Cap = 0x48,
-    /// Battery State, see below (8-bit)
+    /// Battery State, see [`crate::battery::EcBattFlag`] (8-bit)
     Flag = 0x4c,
     /// Battery Count (8-bit)
     Count = 0x4d,

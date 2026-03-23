@@ -1,9 +1,13 @@
 #![feature(default_field_values)]
+#![feature(const_default)]
+#![feature(const_trait_impl)]
 
 use clap::Parser;
-use ec_core::common::{self, CrosEcCommandV2, EcCmd, FullWriteV2Command, fire};
 
-use crate::usb::{EcResponseChargePortCount, EcResponseUsbPdPorts};
+use crate::{
+    battery::get_memmapped_battery_info,
+    usb::{CHARGE_PORT_COUNT, get_port_pd_info},
+};
 
 mod battery;
 mod charging;
@@ -18,7 +22,20 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _args = Args::parse();
-    let num_ports = usb::get_charge_port_count().map_err(|e| e.to_string())?;
+    let num_ports = CHARGE_PORT_COUNT.as_ref().map_err(|e| e.to_string())?;
     println!("Number of charging ports: {num_ports}");
+
+    let tmp = get_memmapped_battery_info();
+    let info = tmp.as_ref().map_err(|e| e.to_string())?;
+    println!("{info}");
+
+    let num_ports = *CHARGE_PORT_COUNT.as_ref().map_err(|e| e.to_string())?;
+
+    for i in 0..num_ports {
+        let tmp = get_port_pd_info(i);
+        let info = tmp.as_ref().map_err(|e| e.to_string())?;
+        dbg!(info);
+    }
+
     Ok(())
 }

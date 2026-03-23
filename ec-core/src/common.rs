@@ -451,3 +451,16 @@ pub unsafe fn fire(
         Ok(NonZero::<c_int>::new(result))
     }
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union CrosEcPayload<Req: Copy, Res: Copy> {
+    pub req: Req,
+    pub res: Res,
+}
+
+#[repr(C)]
+pub struct CrosEcBidirectionalCommand<Req: Copy, Res: Copy> {
+    pub header: CrosEcCommandV2,
+    pub payload: CrosEcPayload<Req, Res>,
+}

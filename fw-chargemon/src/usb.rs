@@ -1,6 +1,8 @@
 use std::sync::LazyLock;
 
-use ec_core::common::{CrosEcCommandV2, EcCmd, FullWriteV2Command, fire};
+use ec_core::common::{
+    CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, EcCmd, FullWriteV2Command, fire,
+};
 
 #[repr(C)]
 enum UsbChargeMode {
@@ -74,12 +76,14 @@ struct EcResponsePdStatus {
 }
 
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 struct EcParamsUsbPdPowerInfo {
     port: u8,
 }
 
-#[repr(C)]
-enum UsbChgType {
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum UsbChgType {
     None,
     Pd,
     C,
@@ -93,21 +97,37 @@ enum UsbChgType {
     Dedicated,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum UsbPowerRoles {
+    Disconnected,
+    Source,
+    Sink,
+    SinkNotCharging,
+}
+
 #[repr(C)]
-struct UsbChgMeasures {
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct UsbChgMeasures {
+    /// Voltage in mV
     voltage_max: u16,
+    /// Voltage in mV
     voltage_now: u16,
+    /// Current in mA
     current_max: u16,
+    /// Current in mA
     current_now: u16,
 }
 
 #[repr(C)]
-struct EcResponseUsbPdPowerInfo {
-    role: u8,
-    r#type: u8,
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct EcResponseUsbPdPowerInfo {
+    role: UsbPowerRoles,
+    r#type: UsbChgType,
     dualrole: u8,
     reserved1: u8,
     meas: UsbChgMeasures,
+    /// Power in microwatts
     max_power: u32,
 }
 
@@ -118,6 +138,7 @@ pub struct EcResponseChargePortCount {
 }
 
 /// Maximum number of PD ports on a device, num_ports will be <= this
+#[allow(unused)]
 const EC_USB_PD_MAX_PORTS: usize = 8;
 
 /// Number of PD ports present. Does not include dedicated ports.
@@ -126,12 +147,12 @@ pub struct EcResponseUsbPdPorts {
     pub num_ports: u8,
 }
 
-type GetUsbPdPortsCommand = FullWriteV2Command<EcResponseChargePortCount>;
-
 /// Get number of charging ports + number of dedicated ports present.
 /// Used in lieu of [`get_usb_pd_ports`], because for some reason on my FW16
 /// that always returns 0.
 pub fn get_charge_port_count() -> Result<u8, Box<dyn std::error::Error + Send + Sync>> {
+    type GetUsbPdPortsCommand = FullWriteV2Command<EcResponseChargePortCount>;
+
     let mut cmd = GetUsbPdPortsCommand {
         header: CrosEcCommandV2 {
             command: EcCmd::ChargePortCount as u32,
@@ -150,4 +171,39 @@ pub fn get_charge_port_count() -> Result<u8, Box<dyn std::error::Error + Send + 
 
 /// Number of charging ports + number of dedicated ports present
 pub static CHARGE_PORT_COUNT: LazyLock<Result<u8, Box<dyn std::error::Error + Send + Sync>>> =
-    LazyLock::new(|| get_charge_port_count());
+    LazyLock::new(get_charge_port_count);
+
+pub(crate) fn get_port_pd_info(
+    idx: u8,
+) -> Result<EcResponseUsbPdPowerInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let num_ports = *CHARGE_PORT_COUNT.as_ref().map_err(|e| e.to_string())?;
+
+    // Verify sane port number
+    if !(0..num_ports).contains(&idx) {
+        return Err(format!("Port number {idx} not within range 0..{num_ports}").into());
+    }
+
+    // bidirectional command
+    let mut cmd = CrosEcBidirectionalCommand::<EcParamsUsbPdPowerInfo, EcResponseUsbPdPowerInfo> {
+        header: CrosEcCommandV2 {
+            version: 0,
+            command: EcCmd::UsbPdPowerInfo as u32,
+            outsize: std::mem::size_of::<EcParamsUsbPdPowerInfo>() as u32,
+            insize: std::mem::size_of::<EcResponseUsbPdPowerInfo>() as u32,
+            ..
+        },
+        payload: CrosEcPayload {
+            req: EcParamsUsbPdPowerInfo { port: idx },
+        },
+    };
+
+    unsafe { fire(&raw mut cmd.header) }?;
+
+    if cmd.header.result != 0 {
+        return Err(format!("EC error: {:}", cmd.header.result).into());
+    }
+
+    let response = unsafe { cmd.payload.res };
+
+    Ok(response)
+}
