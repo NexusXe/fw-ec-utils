@@ -1,7 +1,7 @@
 use std::os::fd::AsRawFd;
 use std::{ffi::c_char, fmt};
 
-use ec_core::common::{CROS_EC_FILE, CrosEcReadmemV2, cros_ec_readmem};
+use ec_core::common::{CROS_EC_FILE, CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, CrosEcReadmemV2, EcCmd, cros_ec_readmem, fire};
 
 #[repr(C)]
 enum EcBatteryVendorParamMode {
@@ -54,6 +54,7 @@ const EC_COMM_TEXT_MAX: usize = 8;
 
 // struct is __packed
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 /// Battery dynamic info parameters
 struct EcParamsBatteryDynamicInfo {
     /// Battery index.
@@ -62,8 +63,9 @@ struct EcParamsBatteryDynamicInfo {
 
 // struct is __packed __aligned(2)
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 /// Battery dynamic info response
-struct EcResponseBatteryDynamicInfo {
+pub(crate) struct EcResponseBatteryDynamicInfo {
     /// Battery voltage (mV)
     actual_voltage: i16,
     /// Battery current (mA); negative=discharging
@@ -80,6 +82,29 @@ struct EcResponseBatteryDynamicInfo {
     desired_current: i16,
 }
 
+pub(crate) fn get_battery_dynamic_info() -> Result<EcResponseBatteryDynamicInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let mut cmd = CrosEcBidirectionalCommand::<EcParamsBatteryDynamicInfo, EcResponseBatteryDynamicInfo> {
+        header: CrosEcCommandV2 {
+            command: EcCmd::BatteryGetDynamic as u32,
+            outsize: std::mem::size_of::<EcParamsBatteryDynamicInfo>() as u32,
+            insize: std::mem::size_of::<EcResponseBatteryDynamicInfo>() as u32,
+            ..
+        },
+        payload: CrosEcPayload {
+            req: EcParamsBatteryDynamicInfo { index: 0 }
+        }
+    };
+
+    unsafe { fire(&raw mut cmd.header) }?;
+
+    if cmd.header.result != 0 {
+        return Err(format!("EC error: {:}", cmd.header.result).into());
+    }
+
+    let response = unsafe { cmd.payload.res };
+
+    Ok(response)
+}
 /// Battery bit flags at EC_MMAP_BATT_FLAG.
 #[derive(Debug)]
 pub(crate) struct EcBattFlags(u8);
@@ -172,18 +197,18 @@ impl fmt::Display for MemMappedBatteryInfo {
         // Grouping the capacity and voltage stats for readability
         writeln!(
             f,
-            "Present Volt:  {}.{:03}",
-            self.volt / 1000,
-            self.volt % 1000
-        )?;
-        writeln!(f, "Present Rate:  {}", self.rate)?;
-        writeln!(f, "Remain. mAh:   {}", self.cap)?;
-        writeln!(
-            f,
-            "Design Volt:   {}.{:03}",
+            "Design Volt:   {}.{:03} V",
             self.dvlt / 1000,
             self.dvlt % 1000
         )?;
+        writeln!(
+            f,
+            "Present Volt:  {}.{:03} V",
+            self.volt / 1000,
+            self.volt % 1000
+        )?;
+        writeln!(f, "Present Curr:  {}.{:03} A", self.rate / 1000, self.rate % 1000)?;
+        writeln!(f, "Remain. mAh:   {}", self.cap)?;
         writeln!(f, "Design mAh:    {}", self.dcap)?;
         writeln!(f, "Last Full mAh: {}", self.lfcc)?;
 

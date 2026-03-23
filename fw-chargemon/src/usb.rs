@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{fmt, sync::LazyLock};
 
 use ec_core::common::{
     CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, EcCmd, FullWriteV2Command, fire,
@@ -97,13 +97,50 @@ pub(crate) enum UsbChgType {
     Dedicated,
 }
 
+impl fmt::Display for UsbChgType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::None => "None",
+                Self::Pd => "PD",
+                Self::C => "C",
+                Self::Proprietary => "Proprietary",
+                Self::Bc12Dcp => "BC 1.2 DCP",
+                Self::Bc12Cdp => "BC 1.2 CDP",
+                Self::Bc12Sdp => "BC 1.2 SDP",
+                Self::Other => "Other",
+                Self::Vbus => "VBUS",
+                Self::Unknown => "Unknown",
+                Self::Dedicated => "Dedicated",
+            }
+        )
+    }
+}
+
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UsbPowerRoles {
     Disconnected,
     Source,
     Sink,
     SinkNotCharging,
+}
+
+impl fmt::Display for UsbPowerRoles {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Disconnected => "Disconnected",
+                Self::Source => "Source",
+                Self::Sink => "Sink",
+                Self::SinkNotCharging => "SinkNotCharging",
+            }
+        )
+    }
 }
 
 #[repr(C)]
@@ -119,6 +156,16 @@ pub(crate) struct UsbChgMeasures {
     current_now: u16,
 }
 
+impl fmt::Display for UsbChgMeasures {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Voltage: {}mV/{}mV, Current: {}mA/{}mA",
+            self.voltage_now, self.voltage_max, self.current_now, self.current_max
+        )
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct EcResponseUsbPdPowerInfo {
@@ -129,6 +176,35 @@ pub(crate) struct EcResponseUsbPdPowerInfo {
     meas: UsbChgMeasures,
     /// Power in microwatts
     max_power: u32,
+}
+
+impl EcResponseUsbPdPowerInfo {
+    pub(crate) fn is_active_charger(&self) -> bool {
+        self.role == UsbPowerRoles::Sink || self.role == UsbPowerRoles::SinkNotCharging
+    }
+}
+
+impl fmt::Display for EcResponseUsbPdPowerInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // write with padding
+        let max_power_whole = self.max_power / 1000000;
+        let max_power_decimal = self.max_power % 1000000;
+        write!(
+            f,
+            "Role: {}, Type: {}, Dualrole: {}, Reserved1: {}, Measurements: {{{}}}, Max Power: {}{} W",
+            self.role,
+            self.r#type,
+            self.dualrole,
+            self.reserved1,
+            self.meas,
+            max_power_whole,
+            if max_power_decimal != 0 {
+                format!(".{:06}", max_power_decimal)
+            } else {
+                "".to_string()
+            }
+        )
+    }
 }
 
 /// Number of charge ports + number of dedicated ports present
@@ -186,7 +262,6 @@ pub(crate) fn get_port_pd_info(
     // bidirectional command
     let mut cmd = CrosEcBidirectionalCommand::<EcParamsUsbPdPowerInfo, EcResponseUsbPdPowerInfo> {
         header: CrosEcCommandV2 {
-            version: 0,
             command: EcCmd::UsbPdPowerInfo as u32,
             outsize: std::mem::size_of::<EcParamsUsbPdPowerInfo>() as u32,
             insize: std::mem::size_of::<EcResponseUsbPdPowerInfo>() as u32,

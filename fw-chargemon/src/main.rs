@@ -5,7 +5,7 @@
 use clap::Parser;
 
 use crate::{
-    battery::get_memmapped_battery_info,
+    battery::{get_battery_dynamic_info, get_memmapped_battery_info},
     usb::{CHARGE_PORT_COUNT, get_port_pd_info},
 };
 
@@ -34,8 +34,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for i in 0..num_ports {
         let tmp = get_port_pd_info(i);
         let info = tmp.as_ref().map_err(|e| e.to_string())?;
-        dbg!(info);
+        if info.is_active_charger() {
+            println!("Active Port:\nPort {i}: {info}");
+        }
     }
+
+    let tmp = get_battery_dynamic_info();
+    let info = tmp.as_ref().map_err(|e| e.to_string())?;
+    println!("{info:?}");
 
     Ok(())
 }
