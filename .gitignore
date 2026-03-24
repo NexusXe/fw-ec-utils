@@ -5,6 +5,7 @@
 *.png
 *.jpg
 *.svg
+*.pdf
 rust-toolchain.toml
 
 *.so
