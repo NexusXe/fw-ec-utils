@@ -12,6 +12,7 @@ use crate::{
 mod battery;
 mod charging;
 mod ec_mmap_offsets;
+#[allow(unused)]
 mod usb;
 
 #[derive(Parser)]
@@ -34,9 +35,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for i in 0..num_ports {
         let tmp = get_port_pd_info(i);
         let info = tmp.as_ref().map_err(|e| e.to_string())?;
-        if info.is_active_charger() {
-            println!("Active Port:\nPort {i}: {info}");
-        }
+        println!(
+            "{}Port {i}: {info}",
+            if info.is_active_charger() {
+                "Active Port: "
+            } else {
+                ""
+            }
+        );
     }
 
     let tmp = get_battery_dynamic_info();

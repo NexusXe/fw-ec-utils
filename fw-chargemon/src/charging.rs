@@ -1,6 +1,6 @@
-use std::fmt;
+#![allow(dead_code)]
 
-use ec_core::common::{CrosEcCommandV2, EcCmd, FullWriteV2Command, fire};
+use std::fmt;
 
 /// Intel-specific items
 #[repr(C)]

@@ -1,9 +1,13 @@
 use std::os::fd::AsRawFd;
 use std::{ffi::c_char, fmt};
 
-use ec_core::common::{CROS_EC_FILE, CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, CrosEcReadmemV2, EcCmd, cros_ec_readmem, fire};
+use ec_core::common::{
+    CROS_EC_FILE, CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, CrosEcReadmemV2,
+    EcCmd, cros_ec_readmem, fire,
+};
 
 #[repr(C)]
+#[allow(unused)]
 enum EcBatteryVendorParamMode {
     Get = 0,
     Set,
@@ -11,6 +15,7 @@ enum EcBatteryVendorParamMode {
 
 // struct is __packed
 #[repr(C, packed)]
+#[allow(unused)]
 struct EcParamsBatteryVendorParam {
     param: u32,
     value: u32,
@@ -19,6 +24,7 @@ struct EcParamsBatteryVendorParam {
 
 // struct is __packed __aligned(4)
 #[repr(C)]
+#[allow(unused)]
 struct EcResponseBatteryVendorParam {
     value: u32,
 }
@@ -82,18 +88,20 @@ pub(crate) struct EcResponseBatteryDynamicInfo {
     desired_current: i16,
 }
 
-pub(crate) fn get_battery_dynamic_info() -> Result<EcResponseBatteryDynamicInfo, Box<dyn std::error::Error + Send + Sync>> {
-    let mut cmd = CrosEcBidirectionalCommand::<EcParamsBatteryDynamicInfo, EcResponseBatteryDynamicInfo> {
-        header: CrosEcCommandV2 {
-            command: EcCmd::BatteryGetDynamic as u32,
-            outsize: std::mem::size_of::<EcParamsBatteryDynamicInfo>() as u32,
-            insize: std::mem::size_of::<EcResponseBatteryDynamicInfo>() as u32,
-            ..
-        },
-        payload: CrosEcPayload {
-            req: EcParamsBatteryDynamicInfo { index: 0 }
-        }
-    };
+pub(crate) fn get_battery_dynamic_info()
+-> Result<EcResponseBatteryDynamicInfo, Box<dyn std::error::Error + Send + Sync>> {
+    let mut cmd =
+        CrosEcBidirectionalCommand::<EcParamsBatteryDynamicInfo, EcResponseBatteryDynamicInfo> {
+            header: CrosEcCommandV2 {
+                command: EcCmd::BatteryGetDynamic as u32,
+                outsize: std::mem::size_of::<EcParamsBatteryDynamicInfo>() as u32,
+                insize: std::mem::size_of::<EcResponseBatteryDynamicInfo>() as u32,
+                ..
+            },
+            payload: CrosEcPayload {
+                req: EcParamsBatteryDynamicInfo { index: 0 },
+            },
+        };
 
     unsafe { fire(&raw mut cmd.header) }?;
 
@@ -131,9 +139,7 @@ impl fmt::Display for EcBattFlags {
                     if i > 0 { ", " } else { "" },
                     BATT_FLAG_DEFS[i as usize]
                 )
-            })?;
-
-        Ok(())
+            })
     }
 }
 
@@ -207,7 +213,12 @@ impl fmt::Display for MemMappedBatteryInfo {
             self.volt / 1000,
             self.volt % 1000
         )?;
-        writeln!(f, "Present Curr:  {}.{:03} A", self.rate / 1000, self.rate % 1000)?;
+        writeln!(
+            f,
+            "Present Curr:  {}.{:03} A",
+            self.rate / 1000,
+            self.rate % 1000
+        )?;
         writeln!(f, "Remain. mAh:   {}", self.cap)?;
         writeln!(f, "Design mAh:    {}", self.dcap)?;
         writeln!(f, "Last Full mAh: {}", self.lfcc)?;

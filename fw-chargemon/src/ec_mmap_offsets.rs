@@ -1,4 +1,5 @@
 /// Battery values are all 32 bits, unless otherwise noted.
+#[allow(unused)] // only the first variant is actually explicitly used. too bad!
 pub(crate) enum Batt {
     /// Battery Present Voltage
     Volt = 0x40,
