@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Id": "org.nexusxe.fwchargemon",
+        "Name": "FW Charging Monitor",
+        "Description": "Framework laptop EC charging status via D-Bus",
+        "Icon": "battery-charging",
+        "Version": "0.1.0",
+        "Category": "System Information",
+        "License": "AGPL-3.0-or-later",
+        "Authors": [
+            {
+                "Name": "Briar Campbell",
+                "Email": "nex@nexusxe.com"
+            }
+        ]
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

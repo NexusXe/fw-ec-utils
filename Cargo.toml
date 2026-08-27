@@ -5,7 +5,8 @@ resolver = "3"
 members = [
     "ec-core",
     "fw-fanctrl-rs",
-    "fw-chargemon"
+    "fw-chargemon",
+    "fw-chargemon-query"
 ]
 
 [profile.release]

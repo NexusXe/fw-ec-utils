@@ -1,10 +1,9 @@
 [package]
-name = "fw-chargemon"
+name = "fw-chargemon-query"
 version = "0.0.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-ec-core = { path = "../ec-core" }
 zbus = "5.14.0"
-serde = { version = "1", features = ["derive"] }
+fw-chargemon = { path = "../fw-chargemon" }

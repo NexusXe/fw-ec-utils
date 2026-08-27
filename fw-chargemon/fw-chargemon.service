@@ -1,0 +1,13 @@
+[Unit]
+Description=Framework EC Charging Monitor D-Bus Service
+After=dbus.service
+Requires=dbus.service
+
+[Service]
+Type=dbus
+BusName=org.nexusxe.FwChargemon
+ExecStart=/usr/local/bin/fw-chargemon
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

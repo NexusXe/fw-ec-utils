@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.nexusxe.FwChargemon
+Exec=/usr/local/bin/fw-chargemon
+User=root
+
