@@ -1,10 +1,6 @@
-use std::os::fd::AsRawFd;
 use std::{ffi::c_char, fmt};
 
-use ec_core::common::{
-    CROS_EC_FILE, CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, CrosEcReadmemV2,
-    EcCmd, cros_ec_readmem, fire,
-};
+use ec_core::{EcCmd, EcCommand, EcError, MemMapRegion};
 
 #[repr(C)]
 #[allow(unused)]
@@ -88,30 +84,18 @@ pub(crate) struct EcResponseBatteryDynamicInfo {
     pub(crate) desired_current: i16,
 }
 
-pub(crate) fn get_battery_dynamic_info()
--> Result<EcResponseBatteryDynamicInfo, Box<dyn std::error::Error + Send + Sync>> {
-    let mut cmd =
-        CrosEcBidirectionalCommand::<EcParamsBatteryDynamicInfo, EcResponseBatteryDynamicInfo> {
-            header: CrosEcCommandV2 {
-                command: EcCmd::BatteryGetDynamic as u32,
-                outsize: std::mem::size_of::<EcParamsBatteryDynamicInfo>() as u32,
-                insize: std::mem::size_of::<EcResponseBatteryDynamicInfo>() as u32,
-                ..
-            },
-            payload: CrosEcPayload {
-                req: EcParamsBatteryDynamicInfo { index: 0 },
-            },
-        };
+/// Get battery dynamic information, i.e. information that is likely to change
+/// every time it is read.
+struct BatteryGetDynamic;
 
-    unsafe { fire(&raw mut cmd.header) }?;
+impl EcCommand for BatteryGetDynamic {
+    type Request = EcParamsBatteryDynamicInfo;
+    type Response = EcResponseBatteryDynamicInfo;
+    const CMD: EcCmd = EcCmd::BatteryGetDynamic;
+}
 
-    if cmd.header.result != 0 {
-        return Err(format!("EC error: {:}", cmd.header.result).into());
-    }
-
-    let response = unsafe { cmd.payload.res };
-
-    Ok(response)
+pub(crate) fn get_battery_dynamic_info() -> Result<EcResponseBatteryDynamicInfo, EcError> {
+    BatteryGetDynamic::call(EcParamsBatteryDynamicInfo { index: 0 })
 }
 /// Battery bit flags at EC_MMAP_BATT_FLAG.
 #[derive(Debug)]
@@ -227,35 +211,13 @@ impl fmt::Display for MemMappedBatteryInfo {
     }
 }
 
-pub(crate) fn get_memmapped_battery_info()
--> Result<MemMappedBatteryInfo, Box<dyn std::error::Error + Send + Sync>> {
-    let mut mem = CrosEcReadmemV2 {
-        offset: crate::ec_mmap_offsets::Batt::Volt as u32,
-        bytes: std::mem::size_of::<MemMappedBatteryInfo>() as u32,
-        buffer: [0; 255],
-    };
+// SAFETY: `MemMappedBatteryInfo` is `#[repr(C)]`, holds only integers and
+// `c_char` arrays -- so every bit pattern is valid -- and its fields line up
+// with the battery block of the EC memory map (see `ec_mmap_offsets::Batt`).
+unsafe impl MemMapRegion for MemMappedBatteryInfo {
+    const OFFSET: u32 = crate::ec_mmap_offsets::Batt::Volt as u32;
+}
 
-    unsafe {
-        let result = cros_ec_readmem(
-            CROS_EC_FILE
-                .as_ref()
-                .map_err(|e| e.to_string())?
-                .as_raw_fd(),
-            &raw mut mem,
-        )?;
-        if result < 0 {
-            return Err(Box::new(std::io::Error::from_raw_os_error(result)));
-        }
-    }
-
-    let mut info: MemMappedBatteryInfo = unsafe { std::mem::zeroed() };
-    unsafe {
-        std::ptr::copy_nonoverlapping(
-            mem.buffer.as_ptr(),
-            (&raw mut info).cast::<u8>(),
-            std::mem::size_of::<MemMappedBatteryInfo>(),
-        );
-    }
-
-    Ok(info)
+pub(crate) fn get_memmapped_battery_info() -> Result<MemMappedBatteryInfo, EcError> {
+    MemMappedBatteryInfo::read()
 }

@@ -1,23 +1,11 @@
-use nix::ioctl_readwrite;
-use std::ffi::c_int;
-use std::fs::{File, OpenOptions};
-use std::num::NonZero;
-use std::os::fd::AsRawFd;
-use std::sync::LazyLock;
+//! The EC host command numbers (`EC_CMD_*`).
 
-pub static CROS_EC_FILE: LazyLock<Result<File, Box<dyn std::error::Error + Send + Sync>>> =
-    LazyLock::new(|| {
-        let ec = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open("/dev/cros_ec");
-        if ec.is_ok() {
-            println!("[INFO]: Got EC file handle.");
-        }
-        Ok(ec?)
-    });
-
-#[allow(dead_code)]
+/// A host command number understood by the embedded controller.
+///
+/// Used as the [`EcCommand::CMD`](crate::EcCommand::CMD) of a command
+/// declaration; the numeric value is what goes on the wire.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EcCmd {
     /// Get protocol version, used to deal with non-backward compatible protocol changes.
     ProtoVersion = 0x0000,
@@ -389,78 +377,4 @@ pub enum EcCmd {
     BoardSpecificBase = 0x3E00,
     /// Reserve a range of host commands for board-specific, experimental, or special purpose features.
     BoardSpecificLast = 0x3FFF,
-}
-
-#[repr(C)]
-pub struct CrosEcCommandV2 {
-    pub version: u32 = 0,
-    pub command: u32,
-    pub outsize: u32,
-    pub insize: u32 = 0,
-    pub result: u32 = 0,
-    pub data: [u8; 0] = [],
-}
-
-#[repr(C)]
-pub struct FullWriteV2Command<T> {
-    pub header: CrosEcCommandV2,
-    pub payload: T,
-}
-
-const EC_MEMMAP_SIZE: usize = 255;
-
-#[repr(C)]
-pub struct CrosEcReadmemV2 {
-    pub offset: u32,
-    pub bytes: u32,
-    pub buffer: [u8; EC_MEMMAP_SIZE],
-}
-
-const CROS_EC_MAGIC: u8 = 0xEC;
-const CROS_EC_DEV_IOCXCMD: c_int = 0;
-const CROS_EC_DEV_IOCRDMEM_V2: c_int = 1;
-
-ioctl_readwrite!(
-    cros_ec_cmd,
-    CROS_EC_MAGIC,
-    CROS_EC_DEV_IOCXCMD,
-    CrosEcCommandV2
-);
-
-ioctl_readwrite!(
-    cros_ec_readmem,
-    CROS_EC_MAGIC,
-    CROS_EC_DEV_IOCRDMEM_V2,
-    CrosEcReadmemV2
-);
-
-/// # Safety
-///
-/// The caller must ensure that `payload` is a valid pointer to a `CrosEcCommandV2` struct.
-pub unsafe fn fire(
-    payload: *mut CrosEcCommandV2,
-) -> Result<Option<NonZero<c_int>>, Box<dyn std::error::Error + Send + Sync>> {
-    let fd = CROS_EC_FILE
-        .as_ref()
-        .map_err(|e| e.to_string())?
-        .as_raw_fd();
-    let result = unsafe { cros_ec_cmd(fd, payload) }?;
-    if result < 0 {
-        Err(Box::new(nix::Error::from_raw(result)))
-    } else {
-        Ok(NonZero::<c_int>::new(result))
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub union CrosEcPayload<Req: Copy, Res: Copy> {
-    pub req: Req,
-    pub res: Res,
-}
-
-#[repr(C)]
-pub struct CrosEcBidirectionalCommand<Req: Copy, Res: Copy> {
-    pub header: CrosEcCommandV2,
-    pub payload: CrosEcPayload<Req, Res>,
 }

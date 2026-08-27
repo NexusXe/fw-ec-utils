@@ -1,4 +1,3 @@
-#![feature(default_field_values)]
 //#![feature(const_default)]
 #![feature(const_trait_impl)]
 

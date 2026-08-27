@@ -1,15 +1,9 @@
-use crate::{
-    common::{
-        CROS_EC_FILE, CrosEcCommandV2, CrosEcReadmemV2, EcCmd, FullWriteV2Command, cros_ec_readmem,
-        fire,
-    },
-    infov,
-};
+use crate::infov;
+use ec_core::{EcCmd, EcCommand, EcError, memmap};
 
 use std::{
     ffi::{CStr, c_char},
     fmt::Display,
-    os::fd::AsRawFd,
     simd::prelude::*,
     sync::{LazyLock, OnceLock},
 };
@@ -236,13 +230,14 @@ impl Default for EcResponseTempSensorGetInfo {
     }
 }
 
-#[repr(C)]
-pub(crate) union TempSensorPayload {
-    pub(crate) params: EcParamsTempSensorGetInfo,
-    pub(crate) response: EcResponseTempSensorGetInfo,
-}
+/// Read temperature sensor info.
+struct GetTempSensorInfo;
 
-type GetTempSensorInfoCommand = FullWriteV2Command<TempSensorPayload>;
+impl EcCommand for GetTempSensorInfo {
+    type Request = EcParamsTempSensorGetInfo;
+    type Response = EcResponseTempSensorGetInfo;
+    const CMD: EcCmd = EcCmd::TempSensorGetInfo;
+}
 
 /// Cache of sensor info responses
 pub(crate) static SENSOR_CACHE: [OnceLock<EcResponseTempSensorGetInfo>; EC_TEMP_SENSOR_ENTRIES] =
@@ -250,32 +245,13 @@ pub(crate) static SENSOR_CACHE: [OnceLock<EcResponseTempSensorGetInfo>; EC_TEMP_
 
 pub(crate) fn probe_sensor(
     id: u8,
-) -> Result<EcResponseTempSensorGetInfo, Box<dyn std::error::Error>> {
+) -> Result<EcResponseTempSensorGetInfo, Box<dyn std::error::Error + Send + Sync>> {
     if id >= EC_TEMP_SENSOR_ENTRIES as u8 {
         return Err("Invalid sensor ID".into());
     }
 
-    let info = SENSOR_CACHE[id as usize].get_or_try_init(|| {
-        let mut cmd = GetTempSensorInfoCommand {
-            header: CrosEcCommandV2 {
-                command: EcCmd::TempSensorGetInfo as u32,
-                outsize: std::mem::size_of::<EcParamsTempSensorGetInfo>() as u32,
-                insize: std::mem::size_of::<EcResponseTempSensorGetInfo>() as u32,
-                ..
-            },
-            payload: TempSensorPayload {
-                params: EcParamsTempSensorGetInfo { id },
-            },
-        };
-
-        let _bytes_returned: std::ffi::c_int = unsafe { fire(&raw mut cmd.header) }
-            .as_ref()
-            .map_err(|e| e.to_string())?
-            .ok_or("Got invalid response from temperature probe.")?
-            .get();
-
-        Ok::<_, Box<dyn std::error::Error>>(unsafe { cmd.payload.response })
-    })?;
+    let info = SENSOR_CACHE[id as usize]
+        .get_or_try_init(|| GetTempSensorInfo::call(EcParamsTempSensorGetInfo { id }))?;
 
     Ok(*info)
 }
@@ -288,36 +264,21 @@ pub(crate) static NUM_TEMP_SENSORS: LazyLock<u8> = LazyLock::new(|| {
     num
 });
 
-pub(crate) fn get_temperatures_v()
--> Result<TempSensorVector, Box<dyn std::error::Error + Send + Sync>> {
-    let sensors_to_read = *NUM_TEMP_SENSORS;
-    let mut mem = CrosEcReadmemV2 {
-        offset: 0x00, // EC_MEMMAP_TEMP_SENSOR
-        bytes: u32::from(sensors_to_read),
-        buffer: [0; 255],
-    };
+/// Offset of the temperature sensor block in the EC memory map.
+const EC_MEMMAP_TEMP_SENSOR: u32 = 0x00;
 
-    unsafe {
-        // Fire the v2 readmem ioctl
-        let result = cros_ec_readmem(
-            CROS_EC_FILE
-                .as_ref()
-                .map_err(|e| e.to_string())?
-                .as_raw_fd(),
-            &raw mut mem,
-        )?;
-        if result < 0 {
-            return Err(Box::new(nix::Error::from_raw(result)));
-        }
-    }
+pub(crate) fn get_temperatures_v() -> Result<TempSensorVector, EcError> {
+    // Read only the sensors the EC reports; the tail of the vector stays zero,
+    // which decodes to the minimum temperature and so never wins a `reduce_max`.
+    let sensors_to_read = usize::from(*NUM_TEMP_SENSORS).min(TempSensorVector::LEN);
+    let mut buffer = [0u8; TempSensorVector::LEN];
 
-    Ok(TempSensorVector::from_slice(
-        &mem.buffer[..TempSensorVector::LEN],
-    ))
+    memmap::read_bytes(EC_MEMMAP_TEMP_SENSOR, &mut buffer[..sensors_to_read])?;
+
+    Ok(TempSensorVector::from_array(buffer))
 }
 
-pub(crate) fn get_temperatures()
--> Result<Vec<UnvalidatedEcTemp>, Box<dyn std::error::Error + Send + Sync>> {
+pub(crate) fn get_temperatures() -> Result<Vec<UnvalidatedEcTemp>, EcError> {
     let temps = get_temperatures_v()?;
     let temps = &temps.as_array()[0..*NUM_TEMP_SENSORS as _];
     Ok(temps.iter().map(|&t| UnvalidatedEcTemp(t)).collect())
@@ -328,7 +289,7 @@ fn max_temp(input: TempSensorVector) -> ValidEcTemp {
     ValidEcTemp(input.reduce_max())
 }
 
-pub(crate) fn get_max_temp() -> Result<ValidEcTemp, Box<dyn std::error::Error + Send + Sync>> {
+pub(crate) fn get_max_temp() -> Result<ValidEcTemp, EcError> {
     let temps = get_temperatures_v()?;
     Ok(max_temp(temps))
 }

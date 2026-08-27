@@ -1,8 +1,6 @@
 use std::{fmt, sync::LazyLock};
 
-use ec_core::common::{
-    CrosEcBidirectionalCommand, CrosEcCommandV2, CrosEcPayload, EcCmd, FullWriteV2Command, fire,
-};
+use ec_core::{EcCmd, EcCommand, EcError};
 
 #[repr(C)]
 enum UsbChargeMode {
@@ -209,6 +207,7 @@ impl fmt::Display for EcResponseUsbPdPowerInfo {
 
 /// Number of charge ports + number of dedicated ports present
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 struct EcResponseChargePortCount {
     pub port_count: u8,
 }
@@ -218,89 +217,72 @@ const EC_USB_PD_MAX_PORTS: usize = 8;
 
 /// Number of PD ports present. Does not include dedicated ports.
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 struct EcResponseUsbPdPorts {
     pub num_ports: u8,
 }
 
+/// Number of PD ports present. Does not include dedicated ports.
+struct UsbPdPorts;
+
+impl EcCommand for UsbPdPorts {
+    type Request = ();
+    type Response = EcResponseUsbPdPorts;
+    const CMD: EcCmd = EcCmd::UsbPdPorts;
+}
+
+/// This command will return the number of USB PD charge ports + the number of
+/// dedicated ports present.
+struct ChargePortCount;
+
+impl EcCommand for ChargePortCount {
+    type Request = ();
+    type Response = EcResponseChargePortCount;
+    const CMD: EcCmd = EcCmd::ChargePortCount;
+}
+
 /// Get number of USB PD ports.
 /// Always returns 0 on my FW16.
-pub(crate) fn get_usb_pd_ports() -> Result<u8, Box<dyn std::error::Error + Send + Sync>> {
-    type GetUsbPdPortsCommand = FullWriteV2Command<EcResponseUsbPdPorts>;
-
-    let mut cmd = GetUsbPdPortsCommand {
-        header: CrosEcCommandV2 {
-            command: EcCmd::UsbPdPorts as u32,
-            // No params sent to EC
-            outsize: 0,
-            // EC writes back an EcResponseUsbPdPorts
-            insize: std::mem::size_of::<EcResponseUsbPdPorts>() as u32,
-            ..
-        },
-        // EC will write the response here
-        payload: EcResponseUsbPdPorts { num_ports: 0 },
-    };
-    unsafe { fire(&raw mut cmd.header) }?;
-    Ok(cmd.payload.num_ports)
+pub(crate) fn get_usb_pd_ports() -> Result<u8, EcError> {
+    Ok(UsbPdPorts::call(())?.num_ports)
 }
 
 /// Get number of charging ports + number of dedicated ports present.
 /// Used in lieu of [`get_usb_pd_ports`], because for some reason on my FW16
 /// that always returns 0.
-pub(crate) fn get_charge_port_count() -> Result<u8, Box<dyn std::error::Error + Send + Sync>> {
-    type GetUsbPdPortsCommand = FullWriteV2Command<EcResponseChargePortCount>;
-
-    let mut cmd = GetUsbPdPortsCommand {
-        header: CrosEcCommandV2 {
-            command: EcCmd::ChargePortCount as u32,
-            // No params sent to EC
-            outsize: 0,
-            // EC writes back an EcResponseUsbPdPorts
-            insize: std::mem::size_of::<EcResponseChargePortCount>() as u32,
-            ..
-        },
-        // EC will write the response here
-        payload: EcResponseChargePortCount { port_count: 0 },
-    };
-    unsafe { fire(&raw mut cmd.header) }?;
-    Ok(cmd.payload.port_count)
+pub(crate) fn get_charge_port_count() -> Result<u8, EcError> {
+    Ok(ChargePortCount::call(())?.port_count)
 }
 
 /// Number of charging ports + number of dedicated ports present
-pub static CHARGE_PORT_COUNT: LazyLock<Result<u8, Box<dyn std::error::Error + Send + Sync>>> =
-    LazyLock::new(get_charge_port_count);
+pub static CHARGE_PORT_COUNT: LazyLock<Result<u8, EcError>> = LazyLock::new(get_charge_port_count);
 
-pub(crate) fn get_port_pd_info(
-    idx: u8,
-) -> Result<EcResponseUsbPdPowerInfo, Box<dyn std::error::Error + Send + Sync>> {
+/// Check `idx` against the port count the EC reports, so a bad index fails
+/// here rather than as an opaque EC rejection.
+fn validate_port(idx: u8) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let num_ports = *CHARGE_PORT_COUNT.as_ref().map_err(|e| e.to_string())?;
 
-    // Verify sane port number
     if !(0..num_ports).contains(&idx) {
         return Err(format!("Port number {idx} not within range 0..{num_ports}").into());
     }
 
-    // bidirectional command
-    let mut cmd = CrosEcBidirectionalCommand::<EcParamsUsbPdPowerInfo, EcResponseUsbPdPowerInfo> {
-        header: CrosEcCommandV2 {
-            command: EcCmd::UsbPdPowerInfo as u32,
-            outsize: std::mem::size_of::<EcParamsUsbPdPowerInfo>() as u32,
-            insize: std::mem::size_of::<EcResponseUsbPdPowerInfo>() as u32,
-            ..
-        },
-        payload: CrosEcPayload {
-            req: EcParamsUsbPdPowerInfo { port: idx },
-        },
-    };
+    Ok(())
+}
 
-    unsafe { fire(&raw mut cmd.header) }?;
+/// Get power information about a USB PD port.
+struct UsbPdPowerInfo;
 
-    if cmd.header.result != 0 {
-        return Err(format!("EC error: {:}", cmd.header.result).into());
-    }
+impl EcCommand for UsbPdPowerInfo {
+    type Request = EcParamsUsbPdPowerInfo;
+    type Response = EcResponseUsbPdPowerInfo;
+    const CMD: EcCmd = EcCmd::UsbPdPowerInfo;
+}
 
-    let response = unsafe { cmd.payload.res };
-
-    Ok(response)
+pub(crate) fn get_port_pd_info(
+    idx: u8,
+) -> Result<EcResponseUsbPdPowerInfo, Box<dyn std::error::Error + Send + Sync>> {
+    validate_port(idx)?;
+    Ok(UsbPdPowerInfo::call(EcParamsUsbPdPowerInfo { port: idx })?)
 }
 
 /// Get info about USB-C SS muxes
@@ -469,74 +451,42 @@ impl fmt::Display for EcResponsePdChipInfoV1 {
     }
 }
 
+/// Get info about the PD chip on a port.
+struct PdChipInfo;
+
+impl EcCommand for PdChipInfo {
+    type Request = EcParamsPdChipInfo;
+    type Response = EcResponsePdChipInfo;
+    const CMD: EcCmd = EcCmd::PdChipInfo;
+}
+
+/// Version 1 of [`PdChipInfo`], which also reports the minimum required
+/// firmware version.
+struct PdChipInfoV1;
+
+impl EcCommand for PdChipInfoV1 {
+    type Request = EcParamsPdChipInfo;
+    type Response = EcResponsePdChipInfoV1;
+    const CMD: EcCmd = EcCmd::PdChipInfo;
+    const VERSION: u32 = 1;
+}
+
 pub(crate) fn get_pd_chip_info(
     idx: u8,
 ) -> Result<EcResponsePdChipInfo, Box<dyn std::error::Error + Send + Sync>> {
-    let num_ports = *CHARGE_PORT_COUNT.as_ref().map_err(|e| e.to_string())?;
-
-    if !(0..num_ports).contains(&idx) {
-        return Err(format!("Port number {idx} not within range 0..{num_ports}").into());
-    }
-
-    let mut cmd = CrosEcBidirectionalCommand::<EcParamsPdChipInfo, EcResponsePdChipInfo> {
-        header: CrosEcCommandV2 {
-            version: u32::MAX,
-            command: EcCmd::PdChipInfo as u32,
-            outsize: std::mem::size_of::<EcParamsPdChipInfo>() as u32,
-            insize: std::mem::size_of::<EcResponsePdChipInfo>() as u32,
-            ..
-        },
-        payload: CrosEcPayload {
-            req: EcParamsPdChipInfo {
-                port: idx,
-                live: EcPdChipInfoLive::Live,
-            },
-        },
-    };
-
-    unsafe { fire(&raw mut cmd.header) }?;
-
-    if cmd.header.result != 0 {
-        return Err(format!("EC error: {:}", cmd.header.result).into());
-    }
-
-    let response = unsafe { cmd.payload.res };
-
-    Ok(response)
+    validate_port(idx)?;
+    Ok(PdChipInfo::call(EcParamsPdChipInfo {
+        port: idx,
+        live: EcPdChipInfoLive::Live,
+    })?)
 }
 
 pub(crate) fn get_pd_chip_info_v1(
     idx: u8,
 ) -> Result<EcResponsePdChipInfoV1, Box<dyn std::error::Error + Send + Sync>> {
-    let num_ports = *CHARGE_PORT_COUNT.as_ref().map_err(|e| e.to_string())?;
-
-    if !(0..num_ports).contains(&idx) {
-        return Err(format!("Port number {idx} not within range 0..{num_ports}").into());
-    }
-
-    let mut cmd = CrosEcBidirectionalCommand::<EcParamsPdChipInfo, EcResponsePdChipInfoV1> {
-        header: CrosEcCommandV2 {
-            version: 1,
-            command: EcCmd::PdChipInfo as u32,
-            outsize: std::mem::size_of::<EcParamsPdChipInfo>() as u32,
-            insize: std::mem::size_of::<EcResponsePdChipInfoV1>() as u32,
-            ..
-        },
-        payload: CrosEcPayload {
-            req: EcParamsPdChipInfo {
-                port: idx,
-                live: EcPdChipInfoLive::Hardcoded,
-            },
-        },
-    };
-
-    unsafe { fire(&raw mut cmd.header) }?;
-
-    if cmd.header.result != 0 {
-        return Err(format!("EC error: {:}", cmd.header.result).into());
-    }
-
-    let response = unsafe { cmd.payload.res };
-
-    Ok(response)
+    validate_port(idx)?;
+    Ok(PdChipInfoV1::call(EcParamsPdChipInfo {
+        port: idx,
+        live: EcPdChipInfoLive::Hardcoded,
+    })?)
 }

@@ -1,4 +1,3 @@
-#![feature(default_field_values)]
 //#![feature(generic_const_exprs)]
 #![feature(const_trait_impl)]
 #![feature(const_convert)]
@@ -20,7 +19,6 @@ compile_error!(
     "fw-fanctrl-rs does not support Windows. Consider http://ozturkkl.github.io/framework-control/ for a Windows-compatible alternative.\nNote that I have never used it, so I cannot vouch for its quality."
 );
 
-pub use ec_core::common;
 mod daemon;
 mod fan_curve;
 mod fans;
