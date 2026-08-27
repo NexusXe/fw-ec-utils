@@ -12,3 +12,4 @@ rust-toolchain.toml
 *.out
 examples/internal*
 ec_commands.h
+*.tar*
