@@ -16,7 +16,9 @@ pub(crate) struct IntelBattDbpt {
     sus_peak_power: u8,
 }
 
-impl const Default for IntelBattDbpt {
+//impl const Default for IntelBattDbpt { // impl const is currently broken in the parser
+#[allow(clippy::derivable_impls)]
+impl Default for IntelBattDbpt {
     fn default() -> Self {
         Self {
             support_level: 0,
@@ -55,7 +57,9 @@ pub(crate) enum SystemPowerSource {
     ACBattery = 3,
 }
 
-impl const Default for SystemPowerSource {
+//impl const Default for SystemPowerSource {
+#[allow(clippy::derivable_impls)] // impl const is currently broken in the parser
+impl Default for SystemPowerSource {
     fn default() -> Self {
         Self::Unknown
     }

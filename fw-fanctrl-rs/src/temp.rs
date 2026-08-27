@@ -43,24 +43,25 @@ pub(crate) struct ValidEcTemp(pub(crate) u8);
 impl ValidEcTemp {
     const EC_TEMP_SENSOR_DEFAULT: Self = Self((296 - EC_TEMP_SENSOR_OFFSET) as u8);
 
-    pub(crate) const fn to_celsius(self) -> CelsiusTemp {
+    pub(crate) fn to_celsius(self) -> CelsiusTemp {
         self.into()
     }
 
     #[allow(dead_code)]
-    pub(crate) const fn from_celsius(celsius: CelsiusTemp) -> Result<Self, &'static str> {
+    pub(crate) fn from_celsius(celsius: CelsiusTemp) -> Result<Self, &'static str> {
         celsius.try_into()
     }
 }
 
-impl const std::default::Default for ValidEcTemp {
+//impl const std::default::Default for ValidEcTemp {
+impl std::default::Default for ValidEcTemp {
     fn default() -> Self {
         Self::EC_TEMP_SENSOR_DEFAULT
     }
 }
 
-// Removed `From` and replaced with `TryFrom`
-impl const TryFrom<CelsiusTemp> for ValidEcTemp {
+//impl const TryFrom<CelsiusTemp> for ValidEcTemp {
+impl TryFrom<CelsiusTemp> for ValidEcTemp {
     type Error = &'static str; // Or a custom domain error
 
     #[inline]
@@ -103,19 +104,20 @@ impl std::error::Error for EcTempSensorError {}
 pub(crate) struct UnvalidatedEcTemp(pub(crate) u8);
 
 impl UnvalidatedEcTemp {
-    pub(crate) const fn to_celsius(self) -> Result<CelsiusTemp, EcTempSensorError> {
+    pub(crate) fn to_celsius(self) -> Result<CelsiusTemp, EcTempSensorError> {
         let valid: ValidEcTemp =
             std::convert::Into::<Result<ValidEcTemp, EcTempSensorError>>::into(self)?;
         Ok(valid.into())
     }
 
     #[allow(dead_code)] // used by plugins
-    pub(crate) const fn validate(self) -> Result<ValidEcTemp, EcTempSensorError> {
+    pub(crate) fn validate(self) -> Result<ValidEcTemp, EcTempSensorError> {
         self.into()
     }
 }
 
-impl const From<UnvalidatedEcTemp> for Result<ValidEcTemp, EcTempSensorError> {
+//impl const From<UnvalidatedEcTemp> for Result<ValidEcTemp, EcTempSensorError> {
+impl From<UnvalidatedEcTemp> for Result<ValidEcTemp, EcTempSensorError> {
     fn from(val: UnvalidatedEcTemp) -> Self {
         match val.0 {
             0xFF => Err(EcTempSensorError::NotPresent),
@@ -128,12 +130,14 @@ impl const From<UnvalidatedEcTemp> for Result<ValidEcTemp, EcTempSensorError> {
 }
 
 impl UnvalidatedEcTemp {
-    pub(crate) const fn get(self) -> Result<ValidEcTemp, EcTempSensorError> {
+    pub(crate) fn get(self) -> Result<ValidEcTemp, EcTempSensorError> {
         self.into()
     }
 }
 
-impl const Default for UnvalidatedEcTemp {
+//impl const Default for UnvalidatedEcTemp {
+#[allow(clippy::derivable_impls)]
+impl Default for UnvalidatedEcTemp {
     fn default() -> Self {
         Self(0x00)
     }
@@ -142,7 +146,8 @@ impl const Default for UnvalidatedEcTemp {
 #[derive(Clone, Copy)]
 pub(crate) struct KelvinTemp(pub(crate) u16);
 
-impl const Default for KelvinTemp {
+//impl const Default for KelvinTemp {
+impl Default for KelvinTemp {
     fn default() -> Self {
         Self(EC_TEMP_SENSOR_OFFSET)
     }
@@ -151,25 +156,29 @@ impl const Default for KelvinTemp {
 #[derive(Clone, Copy)]
 pub(crate) struct CelsiusTemp(pub(crate) i16);
 
-impl const Default for CelsiusTemp {
+//impl const Default for CelsiusTemp {
+impl Default for CelsiusTemp {
     fn default() -> Self {
         KelvinTemp::default().into()
     }
 }
 
-impl const From<ValidEcTemp> for KelvinTemp {
+//impl const From<ValidEcTemp> for KelvinTemp {
+impl From<ValidEcTemp> for KelvinTemp {
     fn from(ec_temp: ValidEcTemp) -> Self {
         Self(u16::from(ec_temp.0) + EC_TEMP_SENSOR_OFFSET)
     }
 }
 
-impl const From<KelvinTemp> for CelsiusTemp {
+//impl const From<KelvinTemp> for CelsiusTemp {
+impl From<KelvinTemp> for CelsiusTemp {
     fn from(kelvin_temp: KelvinTemp) -> Self {
         Self(kelvin_temp.0.cast_signed() - KELVIN_CELSIUS_OFFSET.cast_signed())
     }
 }
 
-impl const From<ValidEcTemp> for CelsiusTemp {
+//impl const From<ValidEcTemp> for CelsiusTemp {
+impl From<ValidEcTemp> for CelsiusTemp {
     fn from(ec_temp: ValidEcTemp) -> Self {
         Self(u16::from(ec_temp.0).cast_signed() - EC_TEMP_SENSOR_OFFSET_CELSIUS.cast_signed())
     }
@@ -217,7 +226,8 @@ impl Display for EcResponseTempSensorGetInfo {
     }
 }
 
-impl const Default for EcResponseTempSensorGetInfo {
+//impl const Default for EcResponseTempSensorGetInfo {
+impl Default for EcResponseTempSensorGetInfo {
     fn default() -> Self {
         Self {
             sensor_name: [0; 32],

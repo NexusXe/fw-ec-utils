@@ -29,13 +29,15 @@ pub(crate) enum CurveParseError {
     IoError(std::io::Error),
 }
 
-impl const From<std::io::Error> for CurveParseError {
+//impl const From<std::io::Error> for CurveParseError {
+impl From<std::io::Error> for CurveParseError {
     fn from(err: std::io::Error) -> Self {
         Self::IoError(err)
     }
 }
 
-impl const From<String> for CurveParseError {
+//impl const From<String> for CurveParseError {
+impl From<String> for CurveParseError {
     fn from(err: String) -> Self {
         Self::CurveDefFormatError(err)
     }

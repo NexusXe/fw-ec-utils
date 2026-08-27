@@ -147,13 +147,13 @@ impl fmt::Display for UsbPowerRoles {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct UsbChgMeasures {
     /// Voltage in mV
-    voltage_max: u16,
+    pub(crate) voltage_max: u16,
     /// Voltage in mV
-    voltage_now: u16,
+    pub(crate) voltage_now: u16,
     /// Current in mA
-    current_max: u16,
+    pub(crate) current_max: u16,
     /// Current in mA
-    current_now: u16,
+    pub(crate) current_now: u16,
 }
 
 impl fmt::Display for UsbChgMeasures {
@@ -169,13 +169,13 @@ impl fmt::Display for UsbChgMeasures {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct EcResponseUsbPdPowerInfo {
-    role: UsbPowerRoles,
-    r#type: UsbChgType,
-    dualrole: u8,
-    reserved1: u8,
-    meas: UsbChgMeasures,
+    pub(crate) role: UsbPowerRoles,
+    pub(crate) r#type: UsbChgType,
+    pub(crate) dualrole: u8,
+    pub(crate) reserved1: u8,
+    pub(crate) meas: UsbChgMeasures,
     /// Power in microwatts
-    max_power: u32,
+    pub(crate) max_power: u32,
 }
 
 impl EcResponseUsbPdPowerInfo {

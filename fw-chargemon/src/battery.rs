@@ -73,19 +73,19 @@ struct EcParamsBatteryDynamicInfo {
 /// Battery dynamic info response
 pub(crate) struct EcResponseBatteryDynamicInfo {
     /// Battery voltage (mV)
-    actual_voltage: i16,
+    pub(crate) actual_voltage: i16,
     /// Battery current (mA); negative=discharging
-    actual_current: i16,
+    pub(crate) actual_current: i16,
     /// Remaining capacity (mAh)
-    remaining_capacity: i16,
+    pub(crate) remaining_capacity: i16,
     /// Full capacity (mAh, might change occasionally)
-    full_capacity: i16,
+    pub(crate) full_capacity: i16,
     /// Flags, see [`EcBattFlag`]
-    flags: i16,
+    pub(crate) flags: i16,
     // Charging voltage desired by battery (mV)
-    desired_voltage: i16,
+    pub(crate) desired_voltage: i16,
     // Charging current desired by battery (mA)
-    desired_current: i16,
+    pub(crate) desired_current: i16,
 }
 
 pub(crate) fn get_battery_dynamic_info()
@@ -115,7 +115,7 @@ pub(crate) fn get_battery_dynamic_info()
 }
 /// Battery bit flags at EC_MMAP_BATT_FLAG.
 #[derive(Debug)]
-pub(crate) struct EcBattFlags(u8);
+pub(crate) struct EcBattFlags(pub(crate) u8);
 
 impl fmt::Display for EcBattFlags {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
