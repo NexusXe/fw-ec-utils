@@ -35,6 +35,31 @@ fn main() {
     }
 }
 
+/// `USB_PD_PORT_POWER_SINK` — the port the EC selected to charge from.
+const ROLE_SINK: u8 = 2;
+/// `USB_PD_PORT_POWER_SINK_NOT_CHARGING` — a charger is attached, but the EC
+/// chose a different port to draw from.
+const ROLE_SINK_NOT_CHARGING: u8 = 3;
+
+/// Rank for [`ROLE_SINK`]; nothing beats it.
+const RANK_CHARGING: u8 = 2;
+
+/// How good a candidate a port is for "where the power is coming from".
+///
+/// The EC marks exactly one port `Sink` once it has picked where to draw from.
+/// Any other port with a charger attached reports `SinkNotCharging`, so taking
+/// the first sink-ish port found reports the wrong one whenever two chargers
+/// are plugged in. A `SinkNotCharging` port is still worth falling back to —
+/// without it a plugged-in-but-unselected charger would show as no charger at
+/// all — but it must never outrank the real one.
+const fn rank(role: u8) -> u8 {
+    match role {
+        ROLE_SINK => RANK_CHARGING,
+        ROLE_SINK_NOT_CHARGING => 1,
+        _ => 0,
+    }
+}
+
 fn run() -> zbus::Result<()> {
     let conn = Connection::system()?;
 
@@ -42,22 +67,39 @@ fn run() -> zbus::Result<()> {
     let usb = FwChargeMonUsbProxyBlocking::new(&conn)?;
     let port_count = usb.charge_port_count()?;
 
-    let mut active_port: Option<NonZeroU8> = None;
-    let mut voltage_max: u16 = 0;
-    let mut current_max: u16 = 0;
-    let mut max_power: u32 = 0;
+    let mut best: Option<(u8, PortPdInfoDto)> = None;
 
     for i in 0..port_count {
         let info = usb.get_port_pd_info(i)?;
-        // role 2 = Sink (charging), role 3 = SinkNotCharging (port present but full)
-        if info.role == 2 || info.role == 3 {
-            active_port = NonZeroU8::new(i + 1);
-            voltage_max = info.voltage_max;
-            current_max = info.current_max;
-            max_power = info.max_power;
-            break;
+
+        if rank(info.role) == 0 {
+            continue;
+        }
+
+        // Strictly greater, so among equally-ranked ports the lowest index wins.
+        if best
+            .as_ref()
+            .is_none_or(|(_, chosen)| rank(info.role) > rank(chosen.role))
+        {
+            let selected = rank(info.role) == RANK_CHARGING;
+            best = Some((i, info));
+
+            // Nothing outranks the port the EC actually chose.
+            if selected {
+                break;
+            }
         }
     }
+
+    let (active_port, voltage_max, current_max, max_power) = match best {
+        Some((i, info)) => (
+            NonZeroU8::new(i + 1),
+            info.voltage_max,
+            info.current_max,
+            info.max_power,
+        ),
+        None => (None, 0, 0, 0),
+    };
 
     // ── Battery: state flags from EC mmap ────────────────────────────────────
     let batt = FwChargeMonBatteryProxyBlocking::new(&conn)?;

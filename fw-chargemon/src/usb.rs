@@ -1,7 +1,21 @@
+//! USB-PD state for the D-Bus service.
+//!
+//! Only [`get_port_pd_info`] and [`CHARGE_PORT_COUNT`] are live; the rest is
+//! reference material transcribed from `ec_commands.h`. Anything targeting a
+//! command this EC does not implement is marked **Not implemented on this EC**
+//! in its doc comment — grep for that phrase before building on something here.
+
 use std::{fmt, sync::LazyLock};
 
-use ec_core::{EcCmd, EcCommand, EcError};
+use ec_core::{EcCmd, EcCommand, EcError, usbpd};
 
+// The port-state types and the two commands behind them are shared with
+// `fw-pdctl`, so they live in `ec-core::usbpd` rather than being declared
+// twice. Re-exported here so this module reads as one place.
+pub(crate) use ec_core::usbpd::{ChargeType, EcResponseUsbPdPowerInfo, PowerRole};
+
+/// **Not implemented on this EC** (`EC_CMD_USB_CHARGE_SET_MODE`, 0x0030) —
+/// reference only, never called.
 #[repr(C)]
 enum UsbChargeMode {
     /// Disable USB port.
@@ -20,6 +34,8 @@ enum UsbChargeMode {
     Count,
 }
 
+/// **Not implemented on this EC** (`EC_CMD_PD_EXCHANGE_STATUS`, 0x0100) —
+/// reference only, never called.
 #[repr(C)]
 enum PdChargeState {
     /// Don't change charging state
@@ -73,149 +89,13 @@ struct EcResponsePdStatus {
     active_charge_port: i8,
 }
 
-#[repr(C, packed)]
-#[derive(Clone, Copy)]
-struct EcParamsUsbPdPowerInfo {
-    port: u8,
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum UsbChgType {
-    None,
-    Pd,
-    C,
-    Proprietary,
-    Bc12Dcp,
-    Bc12Cdp,
-    Bc12Sdp,
-    Other,
-    Vbus,
-    Unknown,
-    Dedicated,
-}
-
-impl fmt::Display for UsbChgType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::None => "None",
-                Self::Pd => "PD",
-                Self::C => "C",
-                Self::Proprietary => "Proprietary",
-                Self::Bc12Dcp => "BC 1.2 DCP",
-                Self::Bc12Cdp => "BC 1.2 CDP",
-                Self::Bc12Sdp => "BC 1.2 SDP",
-                Self::Other => "Other",
-                Self::Vbus => "VBUS",
-                Self::Unknown => "Unknown",
-                Self::Dedicated => "Dedicated",
-            }
-        )
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UsbPowerRoles {
-    Disconnected,
-    Source,
-    Sink,
-    SinkNotCharging,
-}
-
-impl fmt::Display for UsbPowerRoles {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Disconnected => "Disconnected",
-                Self::Source => "Source",
-                Self::Sink => "Sink",
-                Self::SinkNotCharging => "SinkNotCharging",
-            }
-        )
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct UsbChgMeasures {
-    /// Voltage in mV
-    pub(crate) voltage_max: u16,
-    /// Voltage in mV
-    pub(crate) voltage_now: u16,
-    /// Current in mA
-    pub(crate) current_max: u16,
-    /// Current in mA
-    pub(crate) current_now: u16,
-}
-
-impl fmt::Display for UsbChgMeasures {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Voltage: {}mV/{}mV, Current: {}mA/{}mA",
-            self.voltage_now, self.voltage_max, self.current_now, self.current_max
-        )
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct EcResponseUsbPdPowerInfo {
-    pub(crate) role: UsbPowerRoles,
-    pub(crate) r#type: UsbChgType,
-    pub(crate) dualrole: u8,
-    pub(crate) reserved1: u8,
-    pub(crate) meas: UsbChgMeasures,
-    /// Power in microwatts
-    pub(crate) max_power: u32,
-}
-
-impl EcResponseUsbPdPowerInfo {
-    pub(crate) fn is_active_charger(&self) -> bool {
-        self.role == UsbPowerRoles::Sink || self.role == UsbPowerRoles::SinkNotCharging
-    }
-}
-
-impl fmt::Display for EcResponseUsbPdPowerInfo {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // write with padding
-        let max_power_whole = self.max_power / 1000000;
-        let max_power_decimal = self.max_power % 1000000;
-        write!(
-            f,
-            "Role: {}, Type: {}, Dualrole: {}, Reserved1: {}, Measurements: {{{}}}, Max Power: {}{} W",
-            self.role,
-            self.r#type,
-            self.dualrole,
-            self.reserved1,
-            self.meas,
-            max_power_whole,
-            if max_power_decimal != 0 {
-                format!(".{:06}", max_power_decimal)
-            } else {
-                "".to_string()
-            }
-        )
-    }
-}
-
-/// Number of charge ports + number of dedicated ports present
-#[repr(C, packed)]
-#[derive(Clone, Copy)]
-struct EcResponseChargePortCount {
-    pub port_count: u8,
-}
-
 /// Maximum number of PD ports on a device, num_ports will be <= this
 const EC_USB_PD_MAX_PORTS: usize = 8;
 
 /// Number of PD ports present. Does not include dedicated ports.
+///
+/// **Not implemented on this EC** (`EC_CMD_USB_PD_PORTS`, 0x0102) — reference
+/// only, never called.
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
 struct EcResponseUsbPdPorts {
@@ -231,27 +111,20 @@ impl EcCommand for UsbPdPorts {
     const CMD: EcCmd = EcCmd::UsbPdPorts;
 }
 
-/// This command will return the number of USB PD charge ports + the number of
-/// dedicated ports present.
-struct ChargePortCount;
-
-impl EcCommand for ChargePortCount {
-    type Request = ();
-    type Response = EcResponseChargePortCount;
-    const CMD: EcCmd = EcCmd::ChargePortCount;
-}
-
 /// Get number of USB PD ports.
-/// Always returns 0 on my FW16.
+///
+/// **Not implemented on this EC** (`EC_CMD_USB_PD_PORTS`, 0x0102) — it is
+/// absent from `GET_CMD_VERSIONS`, which is why it answers 0 rather than a
+/// port count. Use [`get_charge_port_count`] instead.
 pub(crate) fn get_usb_pd_ports() -> Result<u8, EcError> {
     Ok(UsbPdPorts::call(())?.num_ports)
 }
 
 /// Get number of charging ports + number of dedicated ports present.
-/// Used in lieu of [`get_usb_pd_ports`], because for some reason on my FW16
-/// that always returns 0.
+///
+/// Used in lieu of [`get_usb_pd_ports`], whose command this EC does not have.
 pub(crate) fn get_charge_port_count() -> Result<u8, EcError> {
-    Ok(ChargePortCount::call(())?.port_count)
+    usbpd::charge_port_count()
 }
 
 /// Number of charging ports + number of dedicated ports present
@@ -269,23 +142,17 @@ fn validate_port(idx: u8) -> Result<(), Box<dyn std::error::Error + Send + Sync>
     Ok(())
 }
 
-/// Get power information about a USB PD port.
-struct UsbPdPowerInfo;
-
-impl EcCommand for UsbPdPowerInfo {
-    type Request = EcParamsUsbPdPowerInfo;
-    type Response = EcResponseUsbPdPowerInfo;
-    const CMD: EcCmd = EcCmd::UsbPdPowerInfo;
-}
-
 pub(crate) fn get_port_pd_info(
     idx: u8,
 ) -> Result<EcResponseUsbPdPowerInfo, Box<dyn std::error::Error + Send + Sync>> {
     validate_port(idx)?;
-    Ok(UsbPdPowerInfo::call(EcParamsUsbPdPowerInfo { port: idx })?)
+    Ok(usbpd::power_info(idx)?)
 }
 
-/// Get info about USB-C SS muxes
+/// Get info about USB-C SS muxes.
+///
+/// **Not implemented on this EC** (`EC_CMD_USB_PD_MUX_INFO`, 0x011A) —
+/// reference only, never called.
 #[repr(C, packed)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct EcParamsUsbPdMuxInfo {
@@ -452,6 +319,9 @@ impl fmt::Display for EcResponsePdChipInfoV1 {
 }
 
 /// Get info about the PD chip on a port.
+///
+/// **Not implemented on this EC** (`EC_CMD_PD_CHIP_INFO`, 0x011B) — reference
+/// only, never called.
 struct PdChipInfo;
 
 impl EcCommand for PdChipInfo {
