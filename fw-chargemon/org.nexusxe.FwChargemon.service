@@ -1,5 +1,10 @@
 [D-BUS Service]
 Name=org.nexusxe.FwChargemon
-Exec=/usr/local/bin/fw-chargemon
 User=root
-
+# Hand activation to systemd rather than letting dbus-daemon fork the binary
+# itself. With a bare Exec=, a bus call arriving while the unit is stopped
+# starts a daemon systemd knows nothing about: `systemctl status` reports
+# inactive while that process holds the bus name, and a later `systemctl start`
+# races a second instance against it.
+SystemdService=fw-chargemon.service
+Exec=/bin/false
