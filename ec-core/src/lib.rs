@@ -75,6 +75,21 @@
 //! — [`device::xfer`] is the raw ioctl underneath. It does not check the
 //! result code; that is the caller's job.
 //!
+//! # Where a command declaration belongs
+//!
+//! Declare a command in the crate that uses it. Two exceptions live here
+//! instead:
+//!
+//! - [`usbpd`], for commands more than one crate in the workspace needs.
+//! - [`introspect`], for asking the EC what it implements.
+//!
+//! A command number appearing in [`EcCmd`] is no promise that a given EC backs
+//! it — this table comes from `ec_commands.h`, which describes the protocol,
+//! not any one machine. The FW16, for instance, implements neither
+//! `USB_PD_CONTROL` nor `TYPEC_CONTROL`. Check with
+//! [`introspect::is_supported`] before building on a command you have not seen
+//! answer on the target.
+//!
 //! # Module map
 //!
 //! | Module | Holds |
@@ -83,6 +98,8 @@
 //! | [`memmap`] | [`MemMapRegion`], [`memmap::read_bytes`] |
 //! | [`device`] | the `/dev/cros_ec` handle, both ioctls, [`device::xfer`] |
 //! | [`error`] | [`EcError`], [`EcStatus`] |
+//! | [`usbpd`] | shared USB-PD port state and charge-port selection |
+//! | [`introspect`] | which commands this EC actually implements |
 //! | `ec_cmd` | the [`EcCmd`] command-number table |
 
 #![feature(default_field_values)]
@@ -90,7 +107,9 @@
 pub mod command;
 pub mod device;
 pub mod error;
+pub mod introspect;
 pub mod memmap;
+pub mod usbpd;
 
 mod ec_cmd;
 
@@ -99,3 +118,4 @@ pub use device::{CrosEcCommandV2, CrosEcReadmemV2};
 pub use ec_cmd::EcCmd;
 pub use error::{EcError, EcStatus};
 pub use memmap::MemMapRegion;
+pub use usbpd::{ChargeType, PowerRole};

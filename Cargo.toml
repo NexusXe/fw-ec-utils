@@ -6,7 +6,8 @@ members = [
     "ec-core",
     "fw-fanctrl-rs",
     "fw-chargemon",
-    "fw-chargemon-query"
+    "fw-chargemon-query",
+    "fw-pdctl"
 ]
 
 [profile.release]

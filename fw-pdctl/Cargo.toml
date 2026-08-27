@@ -1,0 +1,10 @@
+[package]
+name = "fw-pdctl"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Read USB-PD port state and force Framework EC port power roles"
+
+[dependencies]
+ec-core = { path = "../ec-core" }
+clap = { version = "4.5.60", features = ["derive"] }
